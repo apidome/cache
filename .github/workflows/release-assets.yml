@@ -43,5 +43,6 @@ jobs:
         with:
           image: quay.io/apidome/cache
           tag: ${{ steps.get_release.outputs.tag_name }}
+          registry: quay.io/apidome/cache
           username: ${{ secrets.QUAY_BOT_USERNAME }}
           password: ${{ secrets.QUAY_BOT_PASSWORD }}
