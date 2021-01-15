@@ -14,16 +14,11 @@ jobs:
       - name: Package Project
         run: zip --junk-paths cache-source README.md
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Get release
+        id: get_release
+        uses: bruceadams/get-release@v1.2.2
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_ASSETS_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
 
       - name: Upload Release Asset
         id: upload-release-asset 
