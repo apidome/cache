@@ -157,8 +157,4 @@ var _ = Describe("Map Cache", func() {
 			}, testTimeout).Should(BeTrue())
 		})
 	})
-
-	PContext("Cuncurrency", func() {
-
-	})
 })
