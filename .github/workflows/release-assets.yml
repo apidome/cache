@@ -41,8 +41,8 @@ jobs:
       - name: Push Container Image
         uses: redhat-actions/push-to-registry@v1.1
         with:
-          image: quay.io/apidome
+          image: cache
           tag: ${{ steps.get_release.outputs.tag_name }}
-          registry: quay.io/apidome/cache
+          registry: quay.io/apidome
           username: ${{ secrets.QUAY_BOT_USERNAME }}
           password: ${{ secrets.QUAY_BOT_PASSWORD }}
