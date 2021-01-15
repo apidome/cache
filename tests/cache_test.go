@@ -157,4 +157,29 @@ var _ = Describe("Map Cache", func() {
 			}, testTimeout).Should(BeTrue())
 		})
 	})
+
+	Context("StoreWithUpdate", func() {
+		It("should continuosly update the value after the specified duration", func() {
+			c.StoreWithUpdate(key, func(currValue interface{}) interface{} {
+				if currValue == nil {
+					return 0
+				}
+
+				return currValue.(int) + 1
+			}, 1*time.Second)
+
+			Consistently(func() bool {
+				currValue, err := c.Get(key)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					val, err := c.Get(key)
+					Expect(err).ToNot(HaveOccurred())
+					return val.(int) > currValue.(int)
+				}, testTimeout, 500*time.Millisecond).Should(BeTrue(), "value should have been updated")
+
+				return true
+			}, 10*time.Second, 2*time.Second).Should(BeTrue(), "value should have been updated")
+		})
+	})
 })
