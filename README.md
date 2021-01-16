@@ -3,7 +3,7 @@ A Golang package for in memory caching
 
 ## Usage
 
-```
+```go
 import (
   "github.com/apidome/cache"
   "time"
