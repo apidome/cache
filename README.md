@@ -15,9 +15,9 @@ func main() {
   
     // Store a value that will be removed after 1 minute
     key, val := "key", "val"
-    duration := time.Minute
-    c.Store(key, val, duration)
-  
+    ttl := time.Minute
+    c.Store(key, val, ttl)
+
     // Store a persistent value
     c.Store(key, val, 0)
 
@@ -29,11 +29,11 @@ func main() {
 
     // Replace a value
     newVal := "newval"
-    newDuration := 2 * time.Minute
-    c.Replace(key, newVal, newDuration)
+    newTTL := 2 * time.Minute
+    c.Replace(key, newVal, newTTL)
 
     // Update expiration of a value
-    c.Expire(key, newDuration)
+    c.Expire(key, newTTL)
 
     // Store an updating value
     c.StoreWithUpdate(key, func(currValue interface{}) interface{} {
@@ -41,6 +41,6 @@ func main() {
             return 0
         }
         return currValue.(int) + 1
-    }, duration)
+    }, ttl)
 
 ```
