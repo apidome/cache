@@ -8,29 +8,28 @@ import (
 
 // -------------------------------------------------------------------------------
 type Cache interface {
-	// Store a value that will be removed after the specified ttl.
-	//
-	// If ttl is 0, the value will not be removed automatically.
-	Store(key, val interface{}, ttl time.Duration) error
+	// Store a value permanently.
+	Store(key, val interface{}) error
 
-	// Remove a value.
-	Remove(key interface{}) error
+	// Store a value that will be removed after the specified ttl.
+	StoreWithExpiration(key, val interface{}, ttl time.Duration) error
+
+	// StoreWithUpdate stores a value and repeatedly updates it.
+	StoreWithUpdate(key, initialValue interface{},
+		updateFunc func(currValue interface{}) interface{},
+		period time.Duration) error
 
 	// Fetch a value.
 	Get(key interface{}) (interface{}, error)
 
 	// Replaces the value of a key.
-	//
-	// If ttl is 0, the value will not be removed automatically.
 	Replace(key, val interface{}, ttl time.Duration) error
 
 	// Expire resets and updates the ttl of a value.
-	//
-	// If ttl is 0, the value will be removed immediately
 	Expire(key interface{}, ttl time.Duration) error
 
-	// StoreWithUpdate stores a value and repeatedly updates it.
-	StoreWithUpdate(key interface{}, updateFunc func(currValue interface{}) interface{}, period time.Duration) error
+	// Remove a value.
+	Remove(key interface{}) error
 }
 
 // -------------------------------------------------------------------------------
@@ -48,9 +47,10 @@ func (ce cacheError) Error() string {
 type errorType string
 
 const (
-	errorTypeAlreadyExists errorType = "AlreadyExists"
-	errorTypeDoesntExist   errorType = "DoesntExist"
-	errorNonPositivePeriod errorType = "NonPositivePeriod"
+	errorTypeAlreadyExists     errorType = "AlreadyExists"
+	errorTypeDoesntExist       errorType = "DoesntExist"
+	errorTypeNonPositivePeriod errorType = "NonPositivePeriod"
+	errorTypeNilUpdateFunc     errorType = "NilUpdateFunc"
 )
 
 func newError(errType errorType, msg string) cacheError {
@@ -72,7 +72,12 @@ func IsDoesntExistError(err error) bool {
 
 func IsNonPositivePeriodError(err error) bool {
 	cacheErr, isCacheErr := err.(cacheError)
-	return isCacheErr && cacheErr.errType == errorNonPositivePeriod
+	return isCacheErr && cacheErr.errType == errorTypeNonPositivePeriod
+}
+
+func IsNilUpdateFuncError(err error) bool {
+	cacheErr, isCacheErr := err.(cacheError)
+	return isCacheErr && cacheErr.errType == errorTypeNilUpdateFunc
 }
 
 // -------------------------------------------------------------------------------
@@ -96,7 +101,12 @@ func NewMapCache() Cache {
 	}
 }
 
-func (m *mapCache) Store(key, val interface{}, ttl time.Duration) error {
+func (m *mapCache) Store(key, val interface{}) error {
+	return m.StoreWithExpiration(key, val, 0)
+}
+
+// If ttl is 0, the value is permanently stored.
+func (m *mapCache) StoreWithExpiration(key, val interface{}, ttl time.Duration) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -108,6 +118,74 @@ func (m *mapCache) Store(key, val interface{}, ttl time.Duration) error {
 
 	if ttl > 0 {
 		m.runExpirationRoutine(key, ttl)
+	}
+
+	return nil
+}
+
+func (m *mapCache) StoreWithUpdate(key, initialValue interface{}, updateFunc func(currValue interface{}) interface{}, period time.Duration) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if _, exists := m.cacheMap[key]; exists {
+		return newError(errorTypeAlreadyExists, fmt.Sprintf("key %v is already in use", key))
+	}
+
+	if updateFunc == nil {
+		return newError(errorTypeNilUpdateFunc, "updateFunc cannot be nil")
+	}
+
+	if period <= 0 {
+		return newError(errorTypeNonPositivePeriod, "period must be bigger than zero")
+	}
+
+	m.cacheMap[key] = initialValue
+	m.runUpdateRoutine(key, updateFunc, period)
+
+	return nil
+}
+
+func (m *mapCache) Get(key interface{}) (interface{}, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if _, exists := m.cacheMap[key]; !exists {
+		return nil, newError(errorTypeDoesntExist, fmt.Sprintf("key %v doesn't exist", key))
+	}
+
+	return m.cacheMap[key], nil
+}
+
+// If ttl is 0, the value will not be removed automatically.
+func (m *mapCache) Replace(key, value interface{}, ttl time.Duration) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	_, exists := m.cacheMap[key]
+	if !exists {
+		return newError(errorTypeDoesntExist, fmt.Sprintf("key %#v doesn't exist", key))
+	}
+
+	m.runExpirationRoutine(key, ttl)
+	m.cacheMap[key] = value
+
+	return nil
+}
+
+// If ttl is 0, the value will be removed immediately.
+func (m *mapCache) Expire(key interface{}, ttl time.Duration) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	_, exists := m.cacheMap[key]
+	if !exists {
+		return newError(errorTypeDoesntExist, fmt.Sprintf("key %#v doesn't exist", key))
+	}
+
+	if ttl > 0 {
+		m.runExpirationRoutine(key, ttl)
+	} else {
+		delete(m.cacheMap, key)
 	}
 
 	return nil
@@ -127,69 +205,8 @@ func (m *mapCache) Remove(key interface{}) error {
 	return nil
 }
 
-func (m *mapCache) Get(key interface{}) (interface{}, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	if _, exists := m.cacheMap[key]; !exists {
-		return nil, newError(errorTypeDoesntExist, fmt.Sprintf("key %v doesn't exist", key))
-	}
-
-	return m.cacheMap[key], nil
-}
-
-func (m *mapCache) Replace(key, value interface{}, ttl time.Duration) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	_, exists := m.cacheMap[key]
-	if !exists {
-		return newError(errorTypeDoesntExist, fmt.Sprintf("key %#v doesn't exist", key))
-	}
-
-	m.runExpirationRoutine(key, ttl)
-	m.cacheMap[key] = value
-
-	return nil
-}
-
-func (m *mapCache) Expire(key interface{}, ttl time.Duration) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	_, exists := m.cacheMap[key]
-	if !exists {
-		return newError(errorTypeDoesntExist, fmt.Sprintf("key %#v doesn't exist", key))
-	}
-
-	if ttl > 0 {
-		m.runExpirationRoutine(key, ttl)
-	} else {
-		delete(m.cacheMap, key)
-	}
-
-	return nil
-}
-
-func (m *mapCache) StoreWithUpdate(key interface{}, updateFunc func(currValue interface{}) interface{}, period time.Duration) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	if _, exists := m.cacheMap[key]; exists {
-		return newError(errorTypeAlreadyExists, fmt.Sprintf("key %v is already in use", key))
-	}
-
-	if period <= 0 {
-		return newError(errorNonPositivePeriod, "period must be bigger than zero")
-	}
-
-	m.cacheMap[key] = updateFunc(nil)
-	m.runUpdateRoutine(key, updateFunc, period)
-
-	return nil
-}
-
 // -------------------------------------------------------------------------------
+
 // -------------------------------------------------------------------------------
 func (m *mapCache) killRoutineIfExists(key interface{}) {
 	keyChan, exists := m.removeChannels[key]

@@ -1,6 +1,7 @@
 package tests_test
 
 import (
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -20,14 +21,23 @@ var _ = Describe("Map Cache", func() {
 	})
 
 	Context("Store", func() {
+		It("should store a value", func() {
+			Expect(c.Store(key, val)).ToNot(HaveOccurred(), "failed storing a value")
+			v, err := c.Get(key)
+			Expect(v).To(Equal(val), fmt.Sprintf("stored value is incorrect for key %v", key))
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("StoreWithExpiration", func() {
 		It("should add a value", func() {
-			c.Store(key, val, time.Minute)
+			c.StoreWithExpiration(key, val, time.Minute)
 			Expect(c.Get(key)).To(Equal(val), "value was not stored in cache")
 		})
 
 		It("should remove a value after timeout", func() {
 			timeout := time.Second * 3
-			c.Store(key, val, timeout)
+			c.StoreWithExpiration(key, val, timeout)
 
 			Eventually(func() bool {
 				time.Sleep(time.Second)
@@ -37,32 +47,42 @@ var _ = Describe("Map Cache", func() {
 		})
 
 		It("should return an error when attempting to override a value", func() {
-			c.Store(key, val, 0)
-			Expect(c.Store(key, "new-val", 0)).To(HaveOccurred(), "expected an error when attempting to override a value")
+			c.Store(key, val)
+			Expect(c.Store(key, "new-val")).To(HaveOccurred(), "expected an error when attempting to override a value")
 			storedVal, err := c.Get(key)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(storedVal).To(Equal(val), "a value was overriden")
 		})
 	})
 
-	Context("Remove", func() {
-		BeforeEach(func() {
-			c.Store(key, val, 0)
+	Context("StoreWithUpdate", func() {
+		It("should continuosly update the value after the specified duration", func() {
+			c.StoreWithUpdate(key, 0, func(currValue interface{}) interface{} {
+				return currValue.(int) + 1
+			}, 1*time.Second)
+
+			Consistently(func() bool {
+				currValue, err := c.Get(key)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					val, err := c.Get(key)
+					Expect(err).ToNot(HaveOccurred())
+					return val.(int) > currValue.(int)
+				}, testTimeout, 500*time.Millisecond).Should(BeTrue(), "value should have been updated")
+
+				return true
+			}, 10*time.Second, 2*time.Second).Should(BeTrue(), "value should have been updated")
 		})
 
-		It("should remove a value", func() {
-			Expect(c.Remove(key)).ToNot(HaveOccurred(), "value was not removed")
-			Expect(c.Store(key, val, 0)).NotTo(HaveOccurred(), "value could not be added eventhough it's key is available")
-		})
-
-		It("should return an error when attempting to remove a non-existent value", func() {
-			Expect(c.Remove("non-existent")).To(HaveOccurred(), "an error was not returned when attempting to remove a non-existent value")
+		It("should return an error if nil updateFunc was provided", func() {
+			Expect(cache.IsNilUpdateFuncError(c.StoreWithUpdate(key, val, nil, 0))).To(Equal(true))
 		})
 	})
 
 	Context("Get", func() {
 		BeforeEach(func() {
-			c.Store(key, val, 0)
+			c.Store(key, val)
 		})
 
 		It("should return a stored value", func() {
@@ -86,7 +106,7 @@ var _ = Describe("Map Cache", func() {
 
 	Context("Replace", func() {
 		BeforeEach(func() {
-			c.Store(key, val, 0)
+			c.Store(key, val)
 		})
 
 		It("should replace a value", func() {
@@ -105,7 +125,7 @@ var _ = Describe("Map Cache", func() {
 
 	Context("Expire", func() {
 		BeforeEach(func() {
-			Expect(c.Store(key, val, 0)).ToNot(HaveOccurred())
+			Expect(c.Store(key, val)).ToNot(HaveOccurred())
 		})
 
 		It("should be removed after expiration time is set", func() {
@@ -137,7 +157,7 @@ var _ = Describe("Map Cache", func() {
 
 		It("should update duration of a value", func() {
 			newKey, newVal := "newKey", "newVal"
-			Expect(c.Store(newKey, newVal, 5*time.Second)).ToNot(HaveOccurred())
+			Expect(c.StoreWithExpiration(newKey, newVal, 5*time.Second)).ToNot(HaveOccurred())
 			Expect(c.Expire(newKey, 20*time.Second)).ToNot(HaveOccurred())
 
 			time.Sleep(10 * time.Second)
@@ -158,28 +178,18 @@ var _ = Describe("Map Cache", func() {
 		})
 	})
 
-	Context("StoreWithUpdate", func() {
-		It("should continuosly update the value after the specified duration", func() {
-			c.StoreWithUpdate(key, func(currValue interface{}) interface{} {
-				if currValue == nil {
-					return 0
-				}
+	Context("Remove", func() {
+		BeforeEach(func() {
+			c.Store(key, val)
+		})
 
-				return currValue.(int) + 1
-			}, 1*time.Second)
+		It("should remove a value", func() {
+			Expect(c.Remove(key)).ToNot(HaveOccurred(), "value was not removed")
+			Expect(c.Store(key, val)).NotTo(HaveOccurred(), "value could not be added eventhough it's key is available")
+		})
 
-			Consistently(func() bool {
-				currValue, err := c.Get(key)
-				Expect(err).ToNot(HaveOccurred())
-
-				Eventually(func() bool {
-					val, err := c.Get(key)
-					Expect(err).ToNot(HaveOccurred())
-					return val.(int) > currValue.(int)
-				}, testTimeout, 500*time.Millisecond).Should(BeTrue(), "value should have been updated")
-
-				return true
-			}, 10*time.Second, 2*time.Second).Should(BeTrue(), "value should have been updated")
+		It("should return an error when attempting to remove a non-existent value", func() {
+			Expect(c.Remove("non-existent")).To(HaveOccurred(), "an error was not returned when attempting to remove a non-existent value")
 		})
 	})
 })
