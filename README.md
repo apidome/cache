@@ -1,6 +1,12 @@
 # cache
 A Golang package for in memory caching
 
+## Get it
+To install, use `go get`, preferrably from a tagged release, for example `v0.1.11`
+```
+go get github.com/apidome/cache@v0.1.11
+```
+
 ## Usage
 
 ```go
