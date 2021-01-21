@@ -15,7 +15,7 @@ func main() {
   
     // Store a value that will be removed after 1 minute
     key, val := "key", "val"
-    c.Store(key, val, time.Minute)
+    c.StoreWithExpiration(key, val, time.Minute)
 
     // Store an updating value
     c.StoreWithUpdate(key, val, func(currValue interface{}) interface{} {
