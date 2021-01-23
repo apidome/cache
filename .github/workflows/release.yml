@@ -9,10 +9,10 @@ jobs:
     name: Upload Release Asset
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout code and build test binary
         uses: actions/checkout@v2
       - name: Package Project
-        run: zip --junk-paths cache-source README.md
+        run: make build-tests
 
       - name: Get release
         id: get_release
@@ -27,22 +27,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_ASSETS_TOKEN }}
         with:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: ./cache-source.zip
-          asset_name: cache-source.zip
-          asset_content_type: application/zip
-
-      - name: Build Container Image
-        uses: redhat-actions/buildah-build@v1
-        with:
-          image: quay.io/apidome/cache
-          tag: ${{ steps.get_release.outputs.tag_name }}
-          dockerfiles: ./Dockerfile
-
-      - name: Push Container Image
-        uses: redhat-actions/push-to-registry@v1.1
-        with:
-          image: cache
-          tag: ${{ steps.get_release.outputs.tag_name }}
-          registry: quay.io/apidome
-          username: ${{ secrets.QUAY_BOT_USERNAME }}
-          password: ${{ secrets.QUAY_BOT_PASSWORD }}
+          asset_path: ./cache.test
+          asset_name: cache.test
