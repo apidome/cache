@@ -5,6 +5,7 @@ It provides several caching mechanisms, which follow these general rules:
 
 - Thread safety
 - Expiring values are removed by background routines
+- Updating values are updated by background routines
 
 ## Get it
 To install, use `go get`, preferrably from a tagged release, for example `v0.1.11`
