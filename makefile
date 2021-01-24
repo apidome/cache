@@ -1,3 +1,0 @@
-.PHONY: build
-test:
-	go test -v -timeout 0 ./...

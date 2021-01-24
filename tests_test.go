@@ -1,4 +1,4 @@
-package tests_test
+package cache
 
 import (
 	"testing"
@@ -14,5 +14,5 @@ const (
 
 func TestTests(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Tests Suite")
+	RunSpecs(t, "Cache Tests Suite")
 }
