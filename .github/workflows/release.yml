@@ -29,3 +29,4 @@ jobs:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
           asset_path: ./cache.test
           asset_name: cache.test
+          asset_content_type: application/octet-stream
