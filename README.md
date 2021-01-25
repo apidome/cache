@@ -8,7 +8,7 @@ It provides several caching mechanisms, which follow these general rules:
 - Updating values are updated by background routines
 
 ## Get it
-To install, use `go get`, preferrably from a tagged release, for example `v0.1.11`
+To install, use `go get`, preferrably from a tagged release, for example `v0.1.15`
 ```
 go get github.com/apidome/cache@v0.1.15
 ```
