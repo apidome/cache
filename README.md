@@ -44,10 +44,13 @@ func main() {
     // Clear the cache (remove all values and stop all background routines)
     err = mc.Clear()
 
+    // Gets all keys in the cache
+    keys, err := mc.Keys()
+
     // Store an expiring value, it will be removed after a minute
     err = mc.StoreWithExpiration(key, val, time.Minute)
 
-    // Replace a value with an expiring value, it will be removed a minute 
+    // Replace a value with an expiring value, it will be removed a minute
     // after this call
     err = mc.ReplaceWithExpiration(key, val.(string)+"2", time.Minute)
 
@@ -61,6 +64,11 @@ func main() {
         return currVal.(string)+"."
     }, time.Minute)
 
+    // Replace a value with a continously updating value, it will be updated every
+    // minute using the provided update function
+    err = mc.ReplaceWithUpdate(key, val, func(currValue interface{}) interface{} {
+        return currVal.(string)+"."
+    }, time.Minute)
 ```
 ## DirectoryCache
 ```go
@@ -105,6 +113,9 @@ func main() {
     // Clear the cache, it will not be usable once cleared
     err = dc.Clear()
 
+    // Gets all keys in the cache
+    keys, err = dc.Keys()
+
     // Store an expiring value, it will be removed after a minute
     err = dc.StoreWithExpiration(key, val, time.Minute)
 
@@ -117,6 +128,11 @@ func main() {
     // Store a continously updating value
     err = dc.StoreWithUpdate(key, val, func(currValue interface{}) interface{} {
         return exampleStruct{"newExample"}
-    })
+    }, time.Minute)
+
+    // Replace a value with a continously updating one
+    err = dc.ReplaceWithUpdate(key, val, func(currValue interface{}) interface{} {
+        return exampleStruct{"newExample"}
+    }, time.Minute)
 }
 ```

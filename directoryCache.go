@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+// -----------------------------------------
+
 const (
 	errorTypeUrecoverableValue errorType = "UnrecoverableValue"
 	errorTypeInvalidValueType            = "InvalidValueType"
@@ -38,21 +40,20 @@ func IsClearedCache(err error) bool {
 	return isCacheErr && cacheErr.errType == errorTypeClearedCache
 }
 
+// -----------------------------------------
+
 type directoryCache struct {
 	// Directory to store value files.
 	cacheDir string
 
 	// Holds the channels that stop the auto removal routines.
-	removeRoutineKillers map[string]chan struct{}
+	removeChannels map[string]*cacheChannel
 
 	// Holds the channels that stop the auto update routines.
-	updateRoutineKillers map[string]chan struct{}
+	updateChannels map[string]*cacheChannel
 
 	// Holds pointers to stored structs to allow recovery from a file.
 	valueTypes map[string]reflect.Type
-	// Handles errors that occur on child routines, if returns true,
-	// the failed action will be retried.
-	errorHandler func(key interface{}, err error)
 
 	// Indication if the cache was cleared, if it was, it should not be usable.
 	cleared bool
@@ -65,8 +66,7 @@ var _ UpdatingExpiringCache = (*directoryCache)(nil)
 // Create a new Cache object that is backed up by a directory.
 //
 // If dir does not exist, it will be created.
-func NewDirectoryCache(dir string,
-	errorHandler func(key string, err error)) (*directoryCache, error) {
+func NewDirectoryCache(dir string) (*directoryCache, error) {
 	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
 		err := os.Mkdir(dir, os.ModeDir)
@@ -83,15 +83,10 @@ func NewDirectoryCache(dir string,
 	}
 
 	return &directoryCache{
-		cacheDir:             dir,
-		removeRoutineKillers: map[string]chan struct{}{},
-		updateRoutineKillers: map[string]chan struct{}{},
-		valueTypes:           map[string]reflect.Type{},
-		errorHandler: func(key interface{}, err error) {
-			if errorHandler != nil {
-				errorHandler(key.(string), err)
-			}
-		},
+		cacheDir:       dir,
+		removeChannels: map[string]*cacheChannel{},
+		updateChannels: map[string]*cacheChannel{},
+		valueTypes:     map[string]reflect.Type{},
 	}, nil
 }
 
@@ -161,11 +156,11 @@ func (dc *directoryCache) Remove(key interface{}) error {
 	dc.mutex.Lock()
 	defer dc.mutex.Unlock()
 
-	return dc.remove(key, false)
+	return dc.remove(key)
 }
 
 // If fromRoutine is true, it will not send on the channels to prevent deadlock
-func (dc *directoryCache) remove(key interface{}, fromRoutine bool) error {
+func (dc *directoryCache) remove(key interface{}) error {
 	if dc.cleared {
 		return newError(errorTypeClearedCache, "cannot reuse a cleared cache")
 	}
@@ -183,23 +178,24 @@ func (dc *directoryCache) remove(key interface{}, fromRoutine bool) error {
 
 	strKey := key.(string)
 
-	if dc.removeRoutineKillers[key.(string)] != nil {
-		//if !fromRoutine {
-		//	dc.removeRoutineKillers[key.(string)] <- struct{}{}
-		//}
-		close(dc.removeRoutineKillers[key.(string)])
-		dc.removeRoutineKillers[key.(string)] = nil
+	err = os.Remove(path.Join(dc.cacheDir, strKey))
+	if err != nil {
+		return err
 	}
 
-	if dc.updateRoutineKillers[key.(string)] != nil {
-		//if !fromRoutine {
-		//	dc.updateRoutineKillers[key.(string)] <- struct{}{}
-		//}
-		close(dc.updateRoutineKillers[key.(string)])
-		dc.updateRoutineKillers[key.(string)] = nil
+	c, exists := dc.removeChannels[strKey]
+	if exists && c != nil {
+		c.signal(abort)
+		delete(dc.removeChannels, strKey)
 	}
 
-	return os.Remove(path.Join(dc.cacheDir, strKey))
+	c, exists = dc.updateChannels[strKey]
+	if exists && c != nil {
+		c.signal(abort)
+		delete(dc.updateChannels, strKey)
+	}
+
+	return nil
 }
 
 // Replace a value in the cache with a permanent value.
@@ -211,7 +207,7 @@ func (dc *directoryCache) Replace(key, val interface{}) error {
 }
 
 func (dc *directoryCache) replace(key, val interface{}) error {
-	err := dc.remove(key, false)
+	err := dc.remove(key)
 	if err != nil {
 		return err
 	}
@@ -243,7 +239,7 @@ func (dc *directoryCache) clear() error {
 	}
 
 	for _, finf := range files {
-		err = dc.remove(finf.Name(), false)
+		err = dc.remove(finf.Name())
 		if err != nil && !IsDoesNotExist(err) {
 			return err
 		}
@@ -257,6 +253,32 @@ func (dc *directoryCache) clear() error {
 	dc.cleared = true
 
 	return nil
+}
+
+// Get all keys in the cache.
+func (dc *directoryCache) Keys() ([]interface{}, error) {
+	dc.mutex.Lock()
+	defer dc.mutex.Unlock()
+
+	return dc.keys()
+}
+
+func (dc *directoryCache) keys() ([]interface{}, error) {
+	if dc.cleared {
+		return nil, newError(errorTypeClearedCache, "cannot reuse a cleared cache")
+	}
+
+	files, err := ioutil.ReadDir(dc.cacheDir)
+	if err != nil {
+		return nil, err
+	}
+
+	keys := []interface{}{}
+	for _, file := range files {
+		keys = append(keys, file.Name())
+	}
+
+	return keys, nil
 }
 
 // Stores a temporary value in the cache, ttl must be greater than zero.
@@ -281,15 +303,19 @@ func (dc *directoryCache) storeWithExpiration(key, val interface{},
 	}
 
 	keyStr := key.(string)
-	dc.removeRoutineKillers[keyStr] = make(chan struct{})
+	c := newCacheChannel()
+	dc.removeChannels[keyStr] = c
 
-	expireRoutine := func() {
-		select {
-		case <-dc.removeRoutineKillers[keyStr]:
-			// This routine might be killed if the value was
-			// 'Replaced' or 'Removed'
+	expireSignalerRoutine := func(c *cacheChannel) {
+		<-time.After(ttl)
+		c.signal(proceed)
+	}
+
+	expireRoutine := func(key string, c *cacheChannel) {
+		msg, ok := <-c.c
+		if !ok || msg == abort {
 			return
-		case <-time.After(ttl):
+		} else {
 			dc.mutex.Lock()
 			defer dc.mutex.Unlock()
 
@@ -298,14 +324,16 @@ func (dc *directoryCache) storeWithExpiration(key, val interface{},
 			}
 
 			// Delete the file from the directory
-			err := dc.remove(key, true)
-			if err != nil && !IsDoesNotExist(err) {
-				dc.errorHandler(key, err)
+			err := dc.remove(key)
+			if err != nil {
+				panic(newWrapperError(errorTypeUnexpectedError,
+					"an unexpected error occurred a background routine", err))
 			}
 		}
 	}
 
-	go expireRoutine()
+	go expireSignalerRoutine(c)
+	go expireRoutine(keyStr, c)
 
 	return nil
 }
@@ -326,7 +354,7 @@ func (dc *directoryCache) replaceWithExpiration(key, val interface{},
 			"period must be greater than zero")
 	}
 
-	err := dc.remove(key, false)
+	err := dc.remove(key)
 	if err != nil {
 		return err
 	}
@@ -358,7 +386,7 @@ func (dc *directoryCache) expire(key interface{}, ttl time.Duration) error {
 		return err
 	}
 
-	err = dc.remove(key, false)
+	err = dc.remove(key)
 	if err != nil {
 		return err
 	}
@@ -395,15 +423,19 @@ func (dc *directoryCache) storeWithUpdate(key, initialValue interface{},
 	}
 
 	keyStr := key.(string)
-	dc.updateRoutineKillers[keyStr] = make(chan struct{})
+	c := newCacheChannel()
+	dc.updateChannels[keyStr] = c
 
-	updateRoutine := func() {
-		select {
-		case <-dc.updateRoutineKillers[keyStr]:
-			// This routine might be killed if the value was
-			// 'Replaced' or 'Removed'
+	updateSignalerRoutine := func(c *cacheChannel) {
+		<-time.After(period)
+		c.signal(proceed)
+	}
+
+	updateRoutine := func(key string, c *cacheChannel) {
+		msg, ok := <-c.c
+		if !ok || msg == abort {
 			return
-		case <-time.After(period):
+		} else {
 			dc.mutex.Lock()
 			defer dc.mutex.Unlock()
 
@@ -413,27 +445,63 @@ func (dc *directoryCache) storeWithUpdate(key, initialValue interface{},
 
 			// Update the value using the update func
 			currVal, err := dc.get(key)
-			if IsDoesNotExist(err) {
-				return
-			}
 			if err != nil {
-				dc.errorHandler(key, err)
-			} else {
-				err = dc.remove(key, true)
-				if err != nil {
-					dc.errorHandler(key, err)
-				}
+				panic(newWrapperError(errorTypeUnexpectedError,
+					"an unexpected error occurred a background routine", err))
+			}
 
-				err = dc.storeWithUpdate(key, updateFunc(currVal),
-					updateFunc, period)
-				if err != nil {
-					dc.errorHandler(key, err)
-				}
+			err = dc.remove(key)
+			if err != nil {
+				panic(newWrapperError(errorTypeUnexpectedError,
+					"an unexpected error occurred a background routine", err))
+			}
+
+			err = dc.storeWithUpdate(key, updateFunc(currVal),
+				updateFunc, period)
+			if err != nil {
+				panic(newWrapperError(errorTypeUnexpectedError,
+					"an unexpected error occurred a background routine", err))
 			}
 		}
 	}
 
-	go updateRoutine()
+	go updateSignalerRoutine(c)
+	go updateRoutine(keyStr, c)
+
+	return nil
+}
+
+// Replace a value with a continously updating value.
+func (dc *directoryCache) ReplaceWithUpdate(key, initialValue interface{},
+	updateFunc func(currValue interface{}) interface{},
+	period time.Duration) error {
+	dc.mutex.Lock()
+	defer dc.mutex.Unlock()
+
+	return dc.replaceWithUpdate(key, initialValue, updateFunc, period)
+}
+
+func (dc *directoryCache) replaceWithUpdate(key, initialValue interface{},
+	updateFunc func(currValue interface{}) interface{},
+	period time.Duration) error {
+	if updateFunc == nil {
+		return newError(errorTypeNilUpdateFunc, "updateFunc cannot be nil")
+	}
+
+	if period <= 0 {
+		return newError(errorTypeNonPositivePeriod,
+			"period must be greater than zero")
+	}
+
+	err := dc.remove(key)
+	if err != nil {
+		return err
+	}
+
+	err = dc.storeWithUpdate(key, initialValue, updateFunc, period)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -561,3 +629,5 @@ func (dc *directoryCache) readValueFromFile(key interface{}) (interface{}, error
 		return nil, err
 	}
 }
+
+// -----------------------------------------

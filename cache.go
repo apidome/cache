@@ -1,8 +1,11 @@
 package cache
 
 import (
+	"sync"
 	"time"
 )
+
+// -----------------------------------------
 
 type Cache interface {
 	// Store a value permanently.
@@ -19,6 +22,9 @@ type Cache interface {
 
 	// Clears the cache.
 	Clear() error
+
+	// Get all keys from the cache.
+	Keys() ([]interface{}, error)
 }
 
 type ExpiringCache interface {
@@ -37,8 +43,13 @@ type ExpiringCache interface {
 type UpdatingCache interface {
 	Cache
 
-	// StoreWithUpdate stores a value and repeatedly updates it.
+	// Stores a value and repeatedly updates it.
 	StoreWithUpdate(key, initialValue interface{},
+		updateFunc func(currValue interface{}) interface{},
+		period time.Duration) error
+
+	// Replaces a value and repeatedly updates it.
+	ReplaceWithUpdate(key, initialValue interface{},
 		updateFunc func(currValue interface{}) interface{},
 		period time.Duration) error
 }
@@ -48,9 +59,41 @@ type UpdatingExpiringCache interface {
 	ExpiringCache
 }
 
+// -----------------------------------------
+
+type timedMessage string
+
+const (
+	abort   timedMessage = "Abort"
+	proceed              = "Proceed"
+)
+
+// -----------------------------------------
+
+type cacheChannel struct {
+	c    chan timedMessage
+	once sync.Once
+}
+
+func newCacheChannel() *cacheChannel {
+	return &cacheChannel{
+		c: make(chan timedMessage),
+	}
+}
+
+func (cc *cacheChannel) signal(msg timedMessage) {
+	cc.once.Do(func() {
+		cc.c <- msg
+		close(cc.c)
+	})
+}
+
+// -----------------------------------------
+
 type cacheError struct {
-	msg     string
-	errType errorType
+	msg         string
+	errType     errorType
+	nestedError error
 }
 
 func (ce cacheError) Error() string {
@@ -60,11 +103,13 @@ func (ce cacheError) Error() string {
 type errorType string
 
 const (
-	errorTypeAlreadyExists     errorType = "AlreadyExists"
+	errorTypeUnexpectedError   errorType = "UnexpectedError"
+	errorTypeAlreadyExists               = "AlreadyExists"
 	errorTypeDoesNotExist                = "DoesNotExist"
 	errorTypeNonPositivePeriod           = "NonPositivePeriod"
 	errorTypeNilUpdateFunc               = "NilUpdateFunc"
 	errorTypeInvalidKeyType              = "InvalidKeyType"
+	errorTypeInvalidMessage              = "InvalidMessage"
 )
 
 func newError(errType errorType, msg string) cacheError {
@@ -72,6 +117,19 @@ func newError(errType errorType, msg string) cacheError {
 		msg:     msg,
 		errType: errType,
 	}
+}
+
+func newWrapperError(errType errorType, msg string, nestedError error) cacheError {
+	return cacheError{
+		msg:         msg,
+		errType:     errType,
+		nestedError: nestedError,
+	}
+}
+
+func IsUnexpectedError(err error) bool {
+	cacheErr, isCacheErr := err.(cacheError)
+	return isCacheErr && cacheErr.errType == errorTypeUnexpectedError
 }
 
 func IsAlreadyExists(err error) bool {
@@ -98,3 +156,10 @@ func IsInvalidKeyType(err error) bool {
 	cacheErr, isCacheErr := err.(cacheError)
 	return isCacheErr && cacheErr.errType == errorTypeInvalidKeyType
 }
+
+func IsInvalidMessage(err error) bool {
+	cacheErr, isCacheErr := err.(cacheError)
+	return isCacheErr && cacheErr.errType == errorTypeInvalidMessage
+}
+
+// -----------------------------------------

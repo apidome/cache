@@ -36,7 +36,8 @@ var _ = Describe("Map Cache", func() {
 		It("should return a stored value", func() {
 			val, err := c.Get(key)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(val).To(Equal(val), "the returned value is not equal to the stored value")
+			Expect(val).To(Equal(val),
+				"the returned value is not equal to the stored value")
 		})
 
 		It("should return an error when attempting to get a non-existent value", func() {
@@ -112,6 +113,19 @@ var _ = Describe("Map Cache", func() {
 		})
 	})
 
+	Context("Keys", func() {
+		BeforeEach(func() {
+			Expect(c.Store(key, val)).ToNot(HaveOccurred())
+		})
+
+		It("should return a slice of cache keys", func() {
+			keys, err := c.Keys()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(keys).To(HaveLen(1))
+			Expect(keys[0]).To(Equal(key))
+		})
+	})
+
 	Context("StoreWithExpiration", func() {
 		It("should add a value", func() {
 			c.StoreWithExpiration(key, val, time.Minute)
@@ -125,7 +139,8 @@ var _ = Describe("Map Cache", func() {
 			Eventually(func() bool {
 				_, err := c.Get(key)
 				return IsDoesNotExist(err)
-			}, testTimeout).Should(BeTrue(), "value was not removed from cache after timeout")
+			}, testTimeout).Should(BeTrue(),
+				"value was not removed from cache after timeout")
 		})
 
 		It("should return an error when attempting to override a value", func() {
@@ -170,12 +185,14 @@ var _ = Describe("Map Cache", func() {
 			Eventually(func() bool {
 				_, err := c.Get(key)
 				return IsDoesNotExist(err)
-			}, testTimeout).Should(BeTrue(), "value was not removed when expiration time was set")
+			}, testTimeout).Should(BeTrue(),
+				"value was not removed when expiration time was set")
 		})
 
 		It("should return an error when attempting to expire a non-existent key", func() {
 			err := c.Expire(nonExistentKey, time.Second)
-			Expect(err).To(HaveOccurred(), "expected an error when expiring a non-existent key")
+			Expect(err).To(HaveOccurred(),
+				"expected an error when expiring a non-existent key")
 		})
 
 		It("should return an error when ttl is non-positive", func() {
@@ -213,14 +230,44 @@ var _ = Describe("Map Cache", func() {
 					val, err := c.Get(key)
 					Expect(err).ToNot(HaveOccurred())
 					return val.(int) > currValue.(int)
-				}, testTimeout, 500*time.Millisecond).Should(BeTrue(), "value should have been updated")
+				}, testTimeout, 500*time.Millisecond).Should(BeTrue(),
+					"value should have been updated")
 
 				return true
-			}, 10*time.Second, 2*time.Second).Should(BeTrue(), "value should have been updated")
+			}, 10*time.Second).Should(BeTrue(), "value should have been updated")
 		})
 
 		It("should return an error if nil updateFunc was provided", func() {
 			Expect(IsNilUpdateFunc(c.StoreWithUpdate(key, val, nil, 0))).To(Equal(true))
+		})
+	})
+
+	Context("ReplaceWithUpdate", func() {
+		It("should replace and continously update a permanent value", func() {
+			Expect(c.Store(key, val)).ToNot(HaveOccurred())
+			updateFunc := func(currValue interface{}) interface{} {
+				intVal := currValue.(testStruct).Int
+				return testStruct{"Test", intVal + 1}
+			}
+
+			Expect(c.ReplaceWithUpdate(key,
+				testStruct{"", 0},
+				updateFunc, 3*time.Second)).ToNot(HaveOccurred())
+
+			Consistently(func() bool {
+				currVal, err := c.Get(key)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					v, err := c.Get(key)
+					Expect(err).ToNot(HaveOccurred())
+					return v.(testStruct).Int > currVal.(testStruct).Int
+				}, testTimeout).Should(BeTrue(),
+					"value should have been updated")
+
+				return true
+			}, 6*time.Second).Should(BeTrue(),
+				"value should have been updating consistently")
 		})
 	})
 })
