@@ -1,7 +1,7 @@
 .PHONY: build
 test:
 	go clean -testcache
-	go test -v -timeout 0 ./...
+	go test -ginkgo.v -timeout 5m ./...
 
 # Creates cache.test
 .PHONY: build-tests

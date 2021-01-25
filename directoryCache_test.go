@@ -25,10 +25,7 @@ var _ = Describe("Directory Cache", func() {
 		cacheDir := fmt.Sprintf("%s/%s", os.TempDir(), "dir-cache")
 		Expect(os.RemoveAll(cacheDir)).ToNot(HaveOccurred())
 
-		ic, err := NewDirectoryCache(cacheDir, func(key string, err error) {
-			defer GinkgoRecover()
-			Fail(err.Error())
-		})
+		ic, err := NewDirectoryCache(cacheDir)
 		Expect(err).ToNot(HaveOccurred())
 
 		c = ic
@@ -110,15 +107,31 @@ var _ = Describe("Directory Cache", func() {
 				v, err := c.Get(newKey)
 				Expect(err).ToNot(HaveOccurred())
 				return v == testStruct{"New", 0}
-			}, 5*time.Second)
+			}, 5*time.Second).Should(BeTrue(),
+				"value should have become permanent")
 		})
 	})
 
 	Context("Clear", func() {
 		It("should clear the cache", func() {
-			Expect(c.Clear()).ToNot(HaveOccurred())
+			Expect(c.Clear()).ToNot(HaveOccurred(),
+				"should have been able to clear an active cache")
 			_, err := c.Get(key)
-			Expect(IsClearedCache(err)).To(BeTrue())
+			Expect(IsClearedCache(err)).To(BeTrue(),
+				"should not be able to access a cleared cache")
+		})
+	})
+
+	Context("Keys", func() {
+		BeforeEach(func() {
+			Expect(c.Store(key, val)).ToNot(HaveOccurred())
+		})
+
+		It("should return a slice of cache keys", func() {
+			keys, err := c.Keys()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(keys).To(HaveLen(1))
+			Expect(keys[0]).To(Equal(key))
 		})
 	})
 
@@ -129,44 +142,48 @@ var _ = Describe("Directory Cache", func() {
 			Consistently(func() bool {
 				v, err := c.Get(key)
 				return v == val && err == nil
-			}, 2*time.Second).Should(BeTrue())
+			}, 2*time.Second).Should(BeTrue(), "value should not have been removed yet")
 
 			Eventually(func() bool {
 				_, err := c.Get(key)
 				return IsDoesNotExist(err)
-			}, testTimeout).Should(BeTrue())
+			}, testTimeout).Should(BeTrue(), "value should have been removed")
 		})
 	})
 
 	Context("ReplaceWithExpiration", func() {
 		It("should replace a permanent value with a temporary one", func() {
 			Expect(c.Store(key, val)).ToNot(HaveOccurred())
-			Expect(c.ReplaceWithExpiration(key, testStruct{"New", 0}, 3*time.Second)).ToNot(HaveOccurred())
+			Expect(c.ReplaceWithExpiration(key,
+				testStruct{"New", 0}, 3*time.Second)).ToNot(HaveOccurred())
 
 			Consistently(func() bool {
 				v, err := c.Get(key)
 				return v == testStruct{"New", 0} && err == nil
-			}, 2*time.Second).Should(BeTrue())
+			}, 2*time.Second).Should(BeTrue(), "value should not have been removed yet")
 
 			Eventually(func() bool {
 				_, err := c.Get(key)
 				return IsDoesNotExist(err)
-			}, testTimeout).Should(BeTrue())
+			}, testTimeout).Should(BeTrue(), "value should have been removed")
 		})
 
 		It("should replace a temporary value with a temporary one", func() {
-			Expect(c.StoreWithExpiration(key, val, 2*time.Second)).ToNot(HaveOccurred())
-			Expect(c.ReplaceWithExpiration(key, testStruct{"New", 0}, 10*time.Second)).ToNot(HaveOccurred())
+			Expect(c.StoreWithExpiration(key, val, 3*time.Second)).ToNot(HaveOccurred())
+			Expect(c.ReplaceWithExpiration(key,
+				testStruct{"New", 0}, 10*time.Second)).ToNot(HaveOccurred())
 
 			Consistently(func() bool {
 				v, err := c.Get(key)
-				return v == testStruct{"New", 0} && err == nil
-			}, 4*time.Second).Should(BeTrue())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(v).To(Equal(testStruct{"New", 0}))
+				return v == testStruct{"New", 0}
+			}, 6*time.Second).Should(BeTrue(), "new value was not consistently present")
 
 			Eventually(func() bool {
 				_, err := c.Get(key)
 				return IsDoesNotExist(err)
-			}, testTimeout).Should(BeTrue())
+			}, testTimeout).Should(BeTrue(), "new value was not eventually removed")
 		})
 	})
 
@@ -178,7 +195,7 @@ var _ = Describe("Directory Cache", func() {
 			Eventually(func() bool {
 				_, err := c.Get(key)
 				return IsDoesNotExist(err)
-			}, testTimeout).Should(BeTrue())
+			}, testTimeout).Should(BeTrue(), "value should have been removed")
 		})
 
 		It("should update the expiration duration on a temporary value", func() {
@@ -188,12 +205,12 @@ var _ = Describe("Directory Cache", func() {
 			Consistently(func() bool {
 				v, err := c.Get(key)
 				return v == val && err == nil
-			}, 2*time.Second).Should(BeTrue())
+			}, 2*time.Second).Should(BeTrue(), "value should not have been removed yet")
 
 			Eventually(func() bool {
 				_, err := c.Get(key)
 				return IsDoesNotExist(err)
-			}, testTimeout).Should(BeTrue())
+			}, testTimeout).Should(BeTrue(), "value should have been removed")
 		})
 	})
 
@@ -204,7 +221,8 @@ var _ = Describe("Directory Cache", func() {
 				return testStruct{"Test", intVal + 1}
 			}
 
-			Expect(c.StoreWithUpdate(key, val, updateFunc, 5*time.Second)).ToNot(HaveOccurred())
+			Expect(c.StoreWithUpdate(key,
+				val, updateFunc, 5*time.Second)).ToNot(HaveOccurred())
 
 			Consistently(func() bool {
 				currVal, err := c.Get(key)
@@ -214,10 +232,38 @@ var _ = Describe("Directory Cache", func() {
 					v, err := c.Get(key)
 					Expect(err).ToNot(HaveOccurred())
 					return v.(testStruct).Int > currVal.(testStruct).Int
-				}, testTimeout).Should(BeTrue())
+				}, testTimeout).Should(BeTrue(), "value should have been updated")
 
 				return true
-			}, 6*time.Second).Should(BeTrue())
+			}, 6*time.Second).Should(BeTrue(),
+				"value should have been updating consistently")
+		})
+	})
+
+	Context("ReplaceWithUpdate", func() {
+		It("should replace and continously update a permanent value", func() {
+			Expect(c.Store(key, val)).ToNot(HaveOccurred())
+			updateFunc := func(currValue interface{}) interface{} {
+				intVal := currValue.(testStruct).Int
+				return testStruct{"Test", intVal + 1}
+			}
+
+			Expect(c.ReplaceWithUpdate(key,
+				testStruct{"", 0}, updateFunc, 3*time.Second)).ToNot(HaveOccurred())
+
+			Consistently(func() bool {
+				currVal, err := c.Get(key)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					v, err := c.Get(key)
+					Expect(err).ToNot(HaveOccurred())
+					return v.(testStruct).Int > currVal.(testStruct).Int
+				}, testTimeout).Should(BeTrue(), "value should have been updated")
+
+				return true
+			}, 6*time.Second).Should(BeTrue(),
+				"value should have been updating consistently")
 		})
 	})
 })

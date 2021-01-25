@@ -11,10 +11,10 @@ type mapCache struct {
 	cacheMap map[interface{}]interface{}
 
 	// Holds the channels that stop the auto removal routines.
-	removeRoutineKillers map[interface{}]chan struct{}
+	removeChannels map[interface{}]*cacheChannel
 
 	// Holds the channels that stop the auto update routines.
-	updateRoutineKillers map[interface{}]chan struct{}
+	updateChannels map[interface{}]*cacheChannel
 
 	mutex sync.Mutex
 }
@@ -24,9 +24,9 @@ var _ UpdatingExpiringCache = (*mapCache)(nil)
 // Create a new Cache object that is backed by a map.
 func NewMapCache() UpdatingExpiringCache {
 	return &mapCache{
-		cacheMap:             map[interface{}]interface{}{},
-		removeRoutineKillers: map[interface{}]chan struct{}{},
-		updateRoutineKillers: map[interface{}]chan struct{}{},
+		cacheMap:       map[interface{}]interface{}{},
+		removeChannels: map[interface{}]*cacheChannel{},
+		updateChannels: map[interface{}]*cacheChannel{},
 	}
 }
 
@@ -75,19 +75,21 @@ func (m *mapCache) Remove(key interface{}) error {
 }
 
 func (m *mapCache) remove(key interface{}) error {
-	if _, exists := m.cacheMap[key]; !exists {
-		return newError(errorTypeDoesNotExist,
-			fmt.Sprintf("key %v doesn't exist", key))
+	_, err := m.get(key)
+	if err != nil {
+		return err
 	}
 
-	if m.removeRoutineKillers[key] != nil {
-		close(m.removeRoutineKillers[key])
-		m.removeRoutineKillers[key] = nil
+	c, exists := m.removeChannels[key]
+	if exists && c != nil {
+		c.signal(abort)
+		delete(m.removeChannels, key)
 	}
 
-	if m.updateRoutineKillers[key] != nil {
-		close(m.updateRoutineKillers[key])
-		m.updateRoutineKillers[key] = nil
+	c, exists = m.updateChannels[key]
+	if exists && c != nil {
+		c.signal(abort)
+		delete(m.updateChannels, key)
 	}
 
 	delete(m.cacheMap, key)
@@ -136,6 +138,24 @@ func (m *mapCache) clear() error {
 	return nil
 }
 
+// Get cache keys.
+func (m *mapCache) Keys() ([]interface{}, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	return m.keys()
+}
+
+func (m *mapCache) keys() ([]interface{}, error) {
+	keys := []interface{}{}
+
+	for key := range m.cacheMap {
+		keys = append(keys, key)
+	}
+
+	return keys, nil
+}
+
 // Store a temporary value in the map, ttl must be greater than zero.
 func (m *mapCache) StoreWithExpiration(key, val interface{}, ttl time.Duration) error {
 	m.mutex.Lock()
@@ -154,26 +174,30 @@ func (m *mapCache) storeWithExpiration(key, val interface{}, ttl time.Duration) 
 		return err
 	}
 
-	m.removeRoutineKillers[key] = make(chan struct{})
+	c := newCacheChannel()
+	m.removeChannels[key] = c
 
-	expirationRoutine := func() {
-		select {
-		case <-m.removeRoutineKillers[key]:
-			// This routine might be killed if the value was modified by
-			// 'Replace' or 'Remove'
+	expireSignalerRoutine := func(c *cacheChannel) {
+		<-time.After(ttl)
+		c.signal(proceed)
+	}
+
+	expireRoutine := func(key interface{}, c *cacheChannel) {
+		msg, ok := <-c.c
+		if !ok || msg == abort {
 			return
-		case <-time.After(ttl):
+		} else {
 			m.mutex.Lock()
+			defer m.mutex.Unlock()
 
 			// Ignoring errors here because if the value was already
 			// removed manually we shouldn't care
 			delete(m.cacheMap, key)
-
-			m.mutex.Unlock()
 		}
 	}
 
-	go expirationRoutine()
+	go expireSignalerRoutine(c)
+	go expireRoutine(key, c)
 
 	return nil
 }
@@ -249,7 +273,8 @@ func (m *mapCache) StoreWithUpdate(key, initialValue interface{},
 }
 
 func (m *mapCache) storeWithUpdate(key, initialValue interface{},
-	updateFunc func(currValue interface{}) interface{}, period time.Duration) error {
+	updateFunc func(currValue interface{}) interface{},
+	period time.Duration) error {
 	if updateFunc == nil {
 		return newError(errorTypeNilUpdateFunc, "updateFunc cannot be nil")
 	}
@@ -264,27 +289,79 @@ func (m *mapCache) storeWithUpdate(key, initialValue interface{},
 		return err
 	}
 
-	m.updateRoutineKillers[key] = make(chan struct{})
+	c := newCacheChannel()
+	m.updateChannels[key] = c
 
-	updateRoutine := func() {
-		for {
-			select {
-			case <-m.updateRoutineKillers[key]:
-				// This routine might be killed if the value was
-				// modified by 'Replace' or 'Remove'
-				return
-			case <-time.After(period):
-				m.mutex.Lock()
+	updateSignalerRoutine := func(c *cacheChannel) {
+		<-time.After(period)
+		c.signal(proceed)
+	}
 
-				// Update the value using the update func
-				m.cacheMap[key] = updateFunc(m.cacheMap[key])
+	updateRoutine := func(key interface{}, c *cacheChannel) {
+		msg, ok := <-c.c
+		if !ok || msg == abort {
+			return
+		} else {
+			m.mutex.Lock()
+			defer m.mutex.Unlock()
 
-				m.mutex.Unlock()
+			currVal, err := m.get(key)
+			if err != nil {
+				panic(newWrapperError(errorTypeUnexpectedError,
+					"an unexpected error occurred a background routine", err))
+			}
+
+			err = m.remove(key)
+			if err != nil {
+				panic(newWrapperError(errorTypeUnexpectedError,
+					"an unexpected error occurred a background routine", err))
+			}
+
+			err = m.storeWithUpdate(key, updateFunc(currVal), updateFunc, period)
+			if err != nil {
+				panic(newWrapperError(errorTypeUnexpectedError,
+					"an unexpected error occurred a background routine", err))
 			}
 		}
 	}
 
-	go updateRoutine()
+	go updateSignalerRoutine(c)
+	go updateRoutine(key, c)
+
+	return nil
+}
+
+// Replace a value with a continously updating value.
+func (m *mapCache) ReplaceWithUpdate(key, initialValue interface{},
+	updateFunc func(currValue interface{}) interface{},
+	period time.Duration) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	return m.replaceWithUpdate(key, initialValue, updateFunc, period)
+}
+
+func (m *mapCache) replaceWithUpdate(key, initialValue interface{},
+	updateFunc func(currValue interface{}) interface{},
+	period time.Duration) error {
+	if updateFunc == nil {
+		return newError(errorTypeNilUpdateFunc, "updateFunc cannot be nil")
+	}
+
+	if period <= 0 {
+		return newError(errorTypeNonPositivePeriod,
+			"period must be greater than zero")
+	}
+
+	err := m.remove(key)
+	if err != nil {
+		return err
+	}
+
+	err = m.storeWithUpdate(key, initialValue, updateFunc, period)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
