@@ -10,7 +10,7 @@ It provides several caching mechanisms, which follow these general rules:
 ## Get it
 To install, use `go get`, preferrably from a tagged release, for example `v0.1.11`
 ```
-go get github.com/apidome/cache@v0.1.11
+go get github.com/apidome/cache@v0.1.15
 ```
 
 # Usage
