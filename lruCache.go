@@ -3,9 +3,14 @@ import (
 	"container/list"
 )
 
+type hasItem struct {
+	value interface{}
+	node  *list.Element
+}
+
 type LRU struct {
 	capacity int
-	hash     map[interface{}]interface{}
+	has      *mapCache
 	queue    *List
 	mutex    sync.Mutex
 }
@@ -13,13 +18,20 @@ type LRU struct {
 func NewLRU(capacity int) *LRU {
 	return &LRU{
 		capacity,
-		make(map[interface{}]interface{}, capacity),
+		NewMapCache(),
 		list.New(),
 	}
 }
 
 func (lru *LRU) Store(key, val interface{}) error {
-	return nil
+	numberOfCachedItems := len(lru.hash.Keys())
+	if numberOfCachedItems == lru.capacity {
+		err := lru.Remove(lru.queue.Back().Value)
+		if err != nil {
+			// TODO: return wrapped error
+		}
+	}
+
 }
 
 func (lru *LRU) Get(key interface{}) (interface{}, error) {
