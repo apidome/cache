@@ -1,6 +1,8 @@
+package cache
+
 import (
-	"sync"
 	"container/list"
+	"sync"
 )
 
 type hashItem struct {
@@ -8,40 +10,53 @@ type hashItem struct {
 	node  *list.Element
 }
 
-type LRU struct {
+type lruCache struct {
+	// The maximal amount of cached items.
 	capacity int
-	hash     *mapCache
-	list     *List
-	mutex    sync.Mutex
+
+	// A hash map that holds tha actual cached data.
+	hash UpdatingExpiringCache
+
+	// A doubly linked list that represents the order of the items,
+	// from the least recently used to the most recently used.
+	list *list.List
+
+	mutex sync.Mutex
 }
 
-func NewLRU(capacity int) *LRU {
-	return &LRU{
-		capacity,
-		NewMapCache(),
-		list.New(),
+// NewLruCache creates a new lruCache instance.
+func NewLruCache(capacity int) *lruCache {
+	return &lruCache{
+		capacity: capacity,
+		hash:     NewMapCache(),
+		list:     list.New(),
 	}
 }
 
-func (lru *LRU) store(key, val interface{}) error {
-	numberOfCachedItems := len(lru.hash.Keys())
+func (lru *lruCache) store(key, val interface{}) error {
+	keys, err := lru.hash.Keys()
+	if err != nil {
+		// TODO: return wrapped error
+	}
+
+	numberOfCachedItems := len(keys)
 
 	// If the cache is full, rmove the most recently used item.
 	if numberOfCachedItems == lru.capacity {
-		err := lru.hash.Remove(lru.queue.Back().Value)
+		err := lru.hash.Remove(lru.list.Back().Value)
 		if err != nil {
 			// TODO: return wrapped error
 		}
 	}
 
-	// Create a new node at the back of the linked list,
+	// Create a new node at the back of the linked list.
 	node := lru.list.PushBack(key)
 
 	// Store the new value.
 	item := hashItem{val, node}
 
 	// Store the new item in the hash map cache.
-	err := lru.hash.Store(key, item)
+	err = lru.hash.Store(key, item)
 
 	// If storing the value failed, remove the linked list node.
 	if err != nil {
@@ -52,22 +67,24 @@ func (lru *LRU) store(key, val interface{}) error {
 	return nil
 }
 
-func (lru *LRU) get(key interface{}) (interface{}, error) {
+func (lru *lruCache) get(key interface{}) (interface{}, error) {
 	item, err := lru.hash.Get(key)
 	if err != nil {
 		// TODO: return wrapped error
 	}
 
+	hashItem, _ := item.(hashItem)
+
 	// Move the item to the head of the linked list.
-	lru.list.MoveToFront(item.node)
-	return item.value, nil
+	lru.list.MoveToFront(hashItem.node)
+	return hashItem.value, nil
 }
 
-func (lru *LRU) getLeastRecentlyUsed() (interface{}, error) {
+func (lru *lruCache) getLeastRecentlyUsed() (interface{}, error) {
 	return lru.hash.Get(lru.list.Front())
 }
 
-func (lru *LRU) remove(key interface{}) error {
+func (lru *lruCache) remove(key interface{}) error {
 	item, err := lru.hash.Get(key)
 	if err != nil {
 		// TODO: return wrapped error
@@ -78,11 +95,13 @@ func (lru *LRU) remove(key interface{}) error {
 		// TODO: return wrapped error
 	}
 
-	lru.list.Remove(item.node)
+	hashItem, _ := item.(hashItem)
+
+	lru.list.Remove(hashItem.node)
 	return nil
 }
 
-func (lru *LRU) clear() error {
+func (lru *lruCache) clear() error {
 	err := lru.hash.Clear()
 	if err != nil {
 		// TODO: return wrapped error
@@ -96,6 +115,6 @@ func (lru *LRU) clear() error {
 	return nil
 }
 
-func (lru *LRU) Keys() ([]interface{}, error) {
+func (lru *lruCache) Keys() ([]interface{}, error) {
 	return lru.hash.Keys()
 }
