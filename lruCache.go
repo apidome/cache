@@ -10,8 +10,8 @@ type hasItem struct {
 
 type LRU struct {
 	capacity int
-	has      *mapCache
-	queue    *List
+	hash     *mapCache
+	list     *List
 	mutex    sync.Mutex
 }
 
@@ -23,33 +23,44 @@ func NewLRU(capacity int) *LRU {
 	}
 }
 
-func (lru *LRU) Store(key, val interface{}) error {
+func (lru *LRU) store(key, val interface{}) error {
 	numberOfCachedItems := len(lru.hash.Keys())
+
+	// If the cache is full, rmove the most recently used item.
 	if numberOfCachedItems == lru.capacity {
-		err := lru.Remove(lru.queue.Back().Value)
+		err := lru.hash.Remove(lru.queue.Back().Value)
 		if err != nil {
 			// TODO: return wrapped error
 		}
 	}
 
-}
+	// Store the new value.
+	err := lru.hash.Store(key, val)
+	if err != nil {
+		// TODO: return wrapped error
+	}
 
-func (lru *LRU) Get(key interface{}) (interface{}, error) {
-	return nil, nil
-}
-
-func (lru *LRU) Remove(key interface{}) error {
+	// Put the new value in the back of the list.
+	lru.list.PushBack(key)
 	return nil
 }
 
-func Clear() error {
-	return nil
-}
-
-func Keys() ([]interface{}, error) {
+func (lru *LRU) get(key interface{}) (interface{}, error) {
 	return nil, nil
 }
 
-func updateHead() {}
+func (lru *LRU) remove(key interface{}) error {
+	return nil
+}
 
-func updateTail() {}
+func (lru *LRU) clear() error {
+	return nil
+}
+
+func (lru *LRU) Keys() ([]interface{}, error) {
+	return lru.hash.Keys()
+}
+
+func (lru *LRU) updateHead() {}
+
+func (lru *LRU) updateTail() {}
