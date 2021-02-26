@@ -3,7 +3,7 @@ import (
 	"container/list"
 )
 
-type hasItem struct {
+type hashItem struct {
 	value interface{}
 	node  *list.Element
 }
@@ -34,19 +34,37 @@ func (lru *LRU) store(key, val interface{}) error {
 		}
 	}
 
+	// Create a new node at the back of the linked list,
+	node := lru.list.PushBack(key)
+
 	// Store the new value.
-	err := lru.hash.Store(key, val)
+	item := hashItem{val, node}
+
+	// Store the new item in the hash map cache.
+	err := lru.hash.Store(key, item)
+
+	// If storing the value failed, remove the linked list node.
 	if err != nil {
+		lru.list.Remove(lru.list.Back())
 		// TODO: return wrapped error
 	}
 
-	// Put the new value in the back of the list.
-	lru.list.PushBack(key)
 	return nil
 }
 
 func (lru *LRU) get(key interface{}) (interface{}, error) {
-	return nil, nil
+	item, err := lru.hash.Get(key)
+	if err != nil {
+		// TODO: return wrapped error
+	}
+
+	// Move the item to the head of the linked list.
+	lru.list.MoveToFront(item.node)
+	return item.value, nil
+}
+
+func (lru *LRU) getLeastRecentlyUsed() (interface{}, error) {
+	return lru.hash.Get(lru.list.Front())
 }
 
 func (lru *LRU) remove(key interface{}) error {
