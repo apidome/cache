@@ -83,13 +83,19 @@ func (lru *LRU) remove(key interface{}) error {
 }
 
 func (lru *LRU) clear() error {
+	err := lru.hash.Clear()
+	if err != nil {
+		// TODO: return wrapped error
+	}
+
+	// Remove all nodes from linked list.
+	for node := lru.list.Front(); node != nil; node = node.Next() {
+		lru.list.Remove(node)
+	}
+
 	return nil
 }
 
 func (lru *LRU) Keys() ([]interface{}, error) {
 	return lru.hash.Keys()
 }
-
-func (lru *LRU) updateHead() {}
-
-func (lru *LRU) updateTail() {}
