@@ -68,6 +68,17 @@ func (lru *LRU) getLeastRecentlyUsed() (interface{}, error) {
 }
 
 func (lru *LRU) remove(key interface{}) error {
+	item, err := lru.hash.Get(key)
+	if err != nil {
+		// TODO: return wrapped error
+	}
+
+	err = lru.hash.Remove(key)
+	if err != nil {
+		// TODO: return wrapped error
+	}
+
+	lru.list.Remove(item.node)
 	return nil
 }
 
