@@ -121,12 +121,12 @@ func (lru *lruCache) get(key interface{}) (interface{}, error) {
 
 // GetMostRecentlyUsedKey returns the key from the front of the linked list.
 func (lru *lruCache) GetMostRecentlyUsedKey() interface{} {
-	return lru.list.Front()
+	return lru.list.Front().Value
 }
 
 // GetLeastRecentlyUsedKey returns the key from the back of the linked list.
 func (lru *lruCache) GetLeastRecentlyUsedKey() interface{} {
-	return lru.list.Back()
+	return lru.list.Back().value
 }
 
 // Remove a cahced value.
