@@ -17,7 +17,7 @@ type lruCache struct {
 	// The maximal amount of cached items.
 	capacity int
 
-	// Current number of cached items.
+	// // Current number of cached items.
 	numberOfItems int
 
 	// A cache that holds tha data.
@@ -35,24 +35,27 @@ var _ Cache = (*lruCache)(nil)
 // NewLru creates a new lruCache instance using mapCache.
 func NewLru(capacity int) *lruCache {
 	return &lruCache{
-		capacity:      capacity,
-		numberOfItems: 0,
-		storage:       NewMapCache(),
-		list:          list.New(),
+		capacity: capacity,
+		storage:  NewMapCache(),
+		list:     list.New(),
 	}
 }
 
 // NewLruWithCustomCache creates a new lruCache with custom cache.
 func NewLruWithCustomCache(capacity int, cache Cache) (*lruCache, error) {
-	if !cache.Count() == 0 {
+	keys, err := cache.Keys()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(keys) == 0 {
 		return nil, newError(errorTypeCacheNotEmpty, "supplied cache must be empty")
 	}
 
 	return &lruCache{
-		capacity:      capacity,
-		numberOfItems: 0,
-		storage:       cache,
-		list:          list.New(),
+		capacity: capacity,
+		storage:  cache,
+		list:     list.New(),
 	}, nil
 }
 
@@ -203,15 +206,36 @@ func (lru *lruCache) Keys() ([]interface{}, error) {
 
 // Count return the number of cached items,
 func (lru *lruCache) Count() int {
+	lru.mutex.Lock()
+	defer lru.mutex.Unlock()
+
+	return lru.count()
+}
+
+func (lru *lruCache) count() int {
 	return lru.numberOfItems
 }
 
 // IsFull returns true if cache is full.
 func (lru *lruCache) IsFull() bool {
+	lru.mutex.Lock()
+	defer lru.mutex.Unlock()
+
+	return lru.isFull()
+}
+
+func (lru *lruCache) isFull() bool {
 	return lru.capacity == lru.numberOfItems
 }
 
 // IsEmpty return false if cache is empty.
 func (lru *lruCache) IsEmpty() bool {
+	lru.mutex.Lock()
+	defer lru.mutex.Unlock()
+
+	return lru.isEmpty()
+}
+
+func (lru *lruCache) isEmpty() bool {
 	return lru.numberOfItems == 0
 }
