@@ -1,0 +1,149 @@
+package cache
+
+import (
+	"fmt"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+)
+
+const CacheSize = 3
+
+var _ = Describe("LRU Cache", func() {
+	var (
+		c            *lruCache
+		keys, values []string
+	)
+
+	for i := 0; i < CacheSize; i++ {
+		keys = append(keys, fmt.Sprintf("test-key-%v", i))
+		values = append(values, fmt.Sprintf("test-value-%v", i))
+	}
+
+	BeforeEach(func() {
+		c = NewLru(CacheSize)
+	})
+
+	Context("Store", func() {
+		It("should store a value", func() {
+			Expect(c.Store(keys[0], values[0])).ToNot(HaveOccurred(), "failed storing a value")
+			v, err := c.Get(keys[0])
+			Expect(v).To(Equal(values[0]), fmt.Sprintf("stored value is incorrect for key %v", keys))
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should count each cached value", func() {
+			for i := 0; i < CacheSize; i++ {
+				Expect(c.Count()).To(Equal(i), "number of items mismatch")
+				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
+			}
+			Expect(c.Count()).To(Equal(CacheSize), "number of items mismatch")
+		})
+
+		It("should not increase items counter when cache is full", func() {
+			for i := 0; i < CacheSize; i++ {
+				Expect(c.Count()).To(Equal(i), "number of items mismatch")
+				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
+			}
+			Expect(c.Count()).To(Equal(CacheSize), "number of items mismatch")
+			c.Store("extra-key", "extra-value")
+			Expect(c.Count()).To(Equal(CacheSize), "number of items increased even though cache is full")
+		})
+
+		It("should remove the least recently used value when the cache is full and the user stores a new value", func() {
+			for i := 0; i < CacheSize; i++ {
+				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
+			}
+
+			Expect(c.Store("extra-key", "extra-value")).ToNot(HaveOccurred(), "failed to store extra value")
+
+			_, err := c.Get(keys[0])
+			Expect(err).To(HaveOccurred(), "managed to getfrom cache a key that should not be cached")
+		})
+	})
+
+	Context("Get", func() {
+		It("should move an item to the front of the linked list after it has been accessed", func() {
+			for i := 0; i < CacheSize; i++ {
+				Expect(c.Count()).To(Equal(i), "number of items mismatch")
+				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
+			}
+			Expect(c.GetMostRecentlyUsedKey()).To(Equal(keys[CacheSize-1]))
+
+			val, err := c.Get(keys[0])
+			Expect(err).ToNot(HaveOccurred(), "failed to get a key")
+			Expect(val).To(Equal(values[0]), "got the wrong value from cache")
+			Expect(c.GetMostRecentlyUsedKey()).To(Equal(keys[CacheSize-2]), "most recent value is not getting updated")
+		})
+	})
+
+	Context("Remove", func() {
+		It("should decrease items counter on delete", func() {
+
+		})
+
+		It("", func() {
+
+		})
+
+		It("", func() {
+
+		})
+
+		It("", func() {
+
+		})
+	})
+
+	Context("Replace", func() {
+		It("", func() {
+
+		})
+	})
+
+	Context("Clear", func() {
+		It("", func() {
+
+		})
+	})
+
+	Context("Keys", func() {
+		It("", func() {
+
+		})
+	})
+
+	Context("Count", func() {
+		It("should return 0 after creating a new instance", func() {
+			Expect(c.Count()).To(Equal(0))
+		})
+
+		It("should return the correct amount of cached items", func() {
+			Expect(c.Count()).To(Equal(0))
+		})
+	})
+
+	Context("IsFull", func() {
+		It("should return true when cache is full", func() {
+			for i := 0; i < CacheSize; i++ {
+				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
+			}
+			Expect(c.IsFull()).To(Equal(true))
+		})
+
+		It("should return false when cache is not full ", func() {
+			Expect(c.IsFull()).To(Equal(false))
+		})
+	})
+
+	Context("IsEmpty", func() {
+		It("should return true when cache is empty ", func() {
+			Expect(c.IsEmpty()).To(Equal(true))
+		})
+
+		It("should return false cache is not empty ", func() {
+			Expect(c.Store(keys[0], values[0])).ToNot(HaveOccurred(), "failed storing a value")
+			Expect(c.IsEmpty()).To(Equal(false))
+		})
+	})
+})
