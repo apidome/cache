@@ -5,17 +5,20 @@ import (
 	"sync"
 )
 
-type hashItem struct {
+type lruItem struct {
+	// The cached data.
 	value interface{}
-	node  *list.Element
+
+	// A reference to the corresponding element in the linked list.
+	node *list.Element
 }
 
 type lruCache struct {
 	// The maximal amount of cached items.
 	capacity int
 
-	// A hash map that holds tha actual cached data.
-	hash *mapCache
+	// A cache that holds tha data.
+	storage Cache
 
 	// A doubly linked list that represents the order of the items,
 	// from the least recently used to the most recently used.
@@ -27,10 +30,18 @@ type lruCache struct {
 var _ Cache = (*lruCache)(nil)
 
 // NewLruCache creates a new lruCache instance.
-func NewLruCache(capacity int) *lruCache {
+func NewLru(capacity int) *lruCache {
 	return &lruCache{
 		capacity: capacity,
-		hash:     NewMapCache(),
+		storage:  NewMapCache(),
+		list:     list.New(),
+	}
+}
+
+func NewLruWithCustomCache(capacity int, cache Cache) *lruCache {
+	return &lruCache{
+		capacity: capacity,
+		storage:  cache,
 		list:     list.New(),
 	}
 }
@@ -44,7 +55,7 @@ func (lru *lruCache) Store(key, val interface{}) error {
 }
 
 func (lru *lruCache) store(key, val interface{}) error {
-	keys, err := lru.hash.Keys()
+	keys, err := lru.storage.Keys()
 	if err != nil {
 		return err
 	}
@@ -53,7 +64,7 @@ func (lru *lruCache) store(key, val interface{}) error {
 
 	// If the cache is full, rmove the most recently used item.
 	if numberOfCachedItems == lru.capacity {
-		err := lru.hash.Remove(lru.list.Back().Value)
+		err := lru.storage.Remove(lru.list.Back().Value)
 		if err != nil {
 			return err
 		}
@@ -63,10 +74,10 @@ func (lru *lruCache) store(key, val interface{}) error {
 	node := lru.list.PushFront(key)
 
 	// Store the new value.
-	item := hashItem{val, node}
+	item := lruItem{val, node}
 
 	// Store the new item in the hash map cache.
-	err = lru.hash.Store(key, item)
+	err = lru.storage.Store(key, item)
 
 	// If storing the value failed, remove the linked list node.
 	if err != nil {
@@ -86,20 +97,20 @@ func (lru *lruCache) Get(key interface{}) (interface{}, error) {
 }
 
 func (lru *lruCache) get(key interface{}) (interface{}, error) {
-	item, err := lru.hash.Get(key)
+	item, err := lru.storage.Get(key)
 	if err != nil {
 		return nil, err
 	}
 
-	hashItem, _ := item.(hashItem)
+	lruItem, _ := item.(lruItem)
 
 	// Move the item to the head of the linked list.
-	lru.list.MoveToFront(hashItem.node)
-	return hashItem.value, nil
+	lru.list.MoveToFront(lruItem.node)
+	return lruItem.value, nil
 }
 
 func (lru *lruCache) getLeastRecentlyUsed() (interface{}, error) {
-	return lru.hash.Get(lru.list.Front())
+	return lru.storage.Get(lru.list.Front())
 }
 
 // Remove a cahced value.
@@ -111,19 +122,19 @@ func (lru *lruCache) Remove(key interface{}) error {
 }
 
 func (lru *lruCache) remove(key interface{}) error {
-	item, err := lru.hash.Get(key)
+	item, err := lru.storage.Get(key)
 	if err != nil {
 		return err
 	}
 
-	err = lru.hash.Remove(key)
+	err = lru.storage.Remove(key)
 	if err != nil {
 		return err
 	}
 
-	hashItem, _ := item.(hashItem)
+	lruItem, _ := item.(lruItem)
 
-	lru.list.Remove(hashItem.node)
+	lru.list.Remove(lruItem.node)
 	return nil
 }
 
@@ -158,7 +169,7 @@ func (lru *lruCache) Clear() error {
 }
 
 func (lru *lruCache) clear() error {
-	err := lru.hash.Clear()
+	err := lru.storage.Clear()
 	if err != nil {
 		return err
 	}
@@ -173,5 +184,5 @@ func (lru *lruCache) clear() error {
 
 // Get all keys.
 func (lru *lruCache) Keys() ([]interface{}, error) {
-	return lru.hash.Keys()
+	return lru.storage.Keys()
 }
