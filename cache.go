@@ -25,6 +25,8 @@ type Cache interface {
 
 	// Get all keys from the cache.
 	Keys() ([]interface{}, error)
+
+	Count() int
 }
 
 type ExpiringCache interface {
@@ -110,6 +112,7 @@ const (
 	errorTypeNilUpdateFunc               = "NilUpdateFunc"
 	errorTypeInvalidKeyType              = "InvalidKeyType"
 	errorTypeInvalidMessage              = "InvalidMessage"
+	errorTypeCacheNotEmpty               = "CacheNotEmpty"
 )
 
 func newError(errType errorType, msg string) cacheError {

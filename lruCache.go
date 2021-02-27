@@ -43,13 +43,17 @@ func NewLru(capacity int) *lruCache {
 }
 
 // NewLruWithCustomCache creates a new lruCache with custom cache.
-func NewLruWithCustomCache(capacity int, cache Cache) *lruCache {
+func NewLruWithCustomCache(capacity int, cache Cache) (*lruCache, error) {
+	if !cache.Count() == 0 {
+		return nil, newError(errorTypeCacheNotEmpty, "supplied cache must be empty")
+	}
+
 	return &lruCache{
 		capacity:      capacity,
 		numberOfItems: 0,
 		storage:       cache,
 		list:          list.New(),
-	}
+	}, nil
 }
 
 // Cache a new value.

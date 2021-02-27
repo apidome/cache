@@ -78,38 +78,51 @@ var _ = Describe("LRU Cache", func() {
 	})
 
 	Context("Remove", func() {
-		It("should decrease items counter on delete", func() {
-
+		BeforeEach(func() {
+			for i := 0; i < CacheSize; i++ {
+				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
+			}
 		})
 
-		It("", func() {
-
+		It("should remove an item", func() {
+			Expect(c.Remove(keys[0])).ToNot(HaveOccurred(), "failed to remove item")
+			_, err := c.Get(keys[0])
+			Expect(err).To(HaveOccurred(), "item has not been deleted")
 		})
 
-		It("", func() {
-
+		It("should decrease items counter", func() {
+			Expect(c.Remove(keys[0])).ToNot(HaveOccurred(), "failed to remove item")
+			Expect(c.Count()).To(Equal(CacheSize - 1))
 		})
 
-		It("", func() {
-
+		It("should not decrease items counter when cache is empty", func() {
+			Expect(c.Clear()).ToNot(HaveOccurred())
+			Expect(c.Remove(keys[0])).To(HaveOccurred())
+			Expect(c.Count()).To(Equal(0))
 		})
 	})
 
 	Context("Replace", func() {
-		It("", func() {
+		BeforeEach(func() {
+			c.Store(keys[0], values[0])
+		})
 
+		It("should not change items counter", func() {
+			Expect(c.Replace(keys[0], "new-value")).ToNot(HaveOccurred())
+			Expect(c.Count()).To(Equal(1))
 		})
 	})
 
 	Context("Clear", func() {
-		It("", func() {
-
+		BeforeEach(func() {
+			for i := 0; i < CacheSize; i++ {
+				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
+			}
 		})
-	})
 
-	Context("Keys", func() {
-		It("", func() {
-
+		It("should remove all items from cache", func() {
+			Expect(c.Clear()).ToNot(HaveOccurred())
+			Expect(c.Count()).To(Equal(0))
 		})
 	})
 
@@ -134,19 +147,25 @@ var _ = Describe("LRU Cache", func() {
 			Expect(c.IsFull()).To(Equal(true))
 		})
 
-		It("should return false when cache is not full ", func() {
+		It("should return false when cache is not full", func() {
 			Expect(c.IsFull()).To(Equal(false))
 		})
 	})
 
 	Context("IsEmpty", func() {
-		It("should return true when cache is empty ", func() {
+		It("should return true when cache is empty", func() {
 			Expect(c.IsEmpty()).To(Equal(true))
 		})
 
-		It("should return false cache is not empty ", func() {
+		It("should return false cache is not empty", func() {
 			Expect(c.Store(keys[0], values[0])).ToNot(HaveOccurred(), "failed storing a value")
 			Expect(c.IsEmpty()).To(Equal(false))
+		})
+	})
+
+	Context("NewLruWithCustomCache", func() {
+		It("", func() {
+
 		})
 	})
 })
