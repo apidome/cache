@@ -119,7 +119,10 @@ var _ = Describe("LRU Cache", func() {
 		})
 
 		It("should return the correct amount of cached items", func() {
-			Expect(c.Count()).To(Equal(0))
+			for i := 0; i < CacheSize; i++ {
+				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
+			}
+			Expect(c.Count()).To(Equal(CacheSize))
 		})
 	})
 
