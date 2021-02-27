@@ -5,7 +5,11 @@ It provides several caching mechanisms, which follow these general rules:
 
 - Thread safety
 - Expiring values are removed by background routines
-- Updating values are updated by background routines
+- Updating values are updated by background routines  
+
+You can find in this package two kinds of cache mechanisms:
+- **Concrete cache** - Those cache implementations use various system resources to cache your concrete data (memory, storage, network, etc)
+- **Behavioural cache** - Those cache implementations wrap the concrete cache types and meant to implement advanced caching algorithms such as _Least recenlty used_ or _Least Frequently Used_. Behavioural cache type are not independent, they can rely on each cache type that implements this package's interface.
 
 ## Get it
 To install, use `go get`, preferrably from a tagged release, for example `v0.1.15`
@@ -13,9 +17,18 @@ To install, use `go get`, preferrably from a tagged release, for example `v0.1.1
 go get github.com/apidome/cache@v0.1.15
 ```
 
+## Concrete Cache
+You can use the following concrete cache types:
+- Map Cache
+- Directory Cache
+  
+## Behavioural Cache
+You can wrap your concrete cache with the following behavioural cache types:
+- LFU Cache (Least Recently Used)
+- *COMING SOON* - LFU Cache (Least Frequently Used)
 # Usage
-
 ## MapCache
+A cache that stores your data in the process's memory.
 ```go
 import (
   "github.com/apidome/cache"
@@ -71,6 +84,7 @@ func main() {
     }, time.Minute)
 ```
 ## DirectoryCache
+A cache that store your data in a certain directory in the file system.
 ```go
 import (
   "github.com/apidome/cache"
@@ -136,3 +150,43 @@ func main() {
     }, time.Minute)
 }
 ```
+## LRU Cached
+An implementation of Least Recently Used cache algorithm. Although behavioural cache types are not independent, LRU cache will work with MapCache by default.
+```go
+import (
+  "github.com/apidome/cache"
+  "fmt"
+ )
+
+func main() {
+    // An LRU cache requires a predefined capacity.
+    lru := NewLru(3)
+
+    // Get the amount of stored items 
+    numberOfItems := lru.Count()
+
+    // Check if lru cache is full
+    isFull := lru.IsFull()
+
+    // Check if lru cache is emptyv
+    isEmpty := lru.IsEmpty()
+
+    // Get the most recently used key
+    mostRecent := lru.GetMostRecentlyUsedKey()
+
+    // Get the least recently used key
+    leastRecent := lru.GetLeastRecentlyUsedKey()
+}
+```
+It is also possible to create an LRU Cache that works with other type of cache, DirectoryCache for example.
+```go
+func main() {
+    // Initialize your own cache.
+    dc := NewDirectoryCache()
+
+    // Create a new lru with a given instance,
+    lru := NewLruWithCustomCache(3, dc)
+}
+```
+
+***NOTE***: When creating an LRU cache with custom concrete cache, the given concrete cahce must be empty!
