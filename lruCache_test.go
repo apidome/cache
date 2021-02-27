@@ -164,8 +164,10 @@ var _ = Describe("LRU Cache", func() {
 	})
 
 	Context("NewLruWithCustomCache", func() {
-		It("", func() {
-
+		It("should return an error when being supplied with a non empty cache", func() {
+			mapCache := NewMapCache()
+			_, err := NewLruWithCustomCache(CacheSize, mapCache)
+			Expect(err).To(HaveOccurred())
 		})
 	})
 })
