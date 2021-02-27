@@ -150,7 +150,7 @@ func main() {
     }, time.Minute)
 }
 ```
-## LRU Cached
+## LRU Cache
 An implementation of Least Recently Used cache algorithm. Although behavioural cache types are not independent, LRU cache will work with MapCache by default.
 ```go
 import (
