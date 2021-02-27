@@ -166,6 +166,7 @@ var _ = Describe("LRU Cache", func() {
 	Context("NewLruWithCustomCache", func() {
 		It("should return an error when being supplied with a non empty cache", func() {
 			mapCache := NewMapCache()
+			Expect(mapCache.Store(keys[0], values[0])).ToNot(HaveOccurred(), "failed storing a value in map cache")
 			_, err := NewLruWithCustomCache(CacheSize, mapCache)
 			Expect(err).To(HaveOccurred())
 		})
