@@ -48,7 +48,7 @@ func NewLruWithCustomCache(capacity int, cache Cache) (*lruCache, error) {
 		return nil, err
 	}
 
-	if len(keys) == 0 {
+	if len(keys) > 0 {
 		return nil, newError(errorTypeCacheNotEmpty, "supplied cache must be empty")
 	}
 
@@ -195,6 +195,8 @@ func (lru *lruCache) clear() error {
 	for node := lru.list.Front(); node != nil; node = node.Next() {
 		lru.list.Remove(node)
 	}
+
+	lru.numberOfItems = 0
 
 	return nil
 }

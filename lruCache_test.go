@@ -73,7 +73,7 @@ var _ = Describe("LRU Cache", func() {
 			val, err := c.Get(keys[0])
 			Expect(err).ToNot(HaveOccurred(), "failed to get a key")
 			Expect(val).To(Equal(values[0]), "got the wrong value from cache")
-			Expect(c.GetMostRecentlyUsedKey()).To(Equal(keys[CacheSize-2]), "most recent value is not getting updated")
+			Expect(c.GetMostRecentlyUsedKey()).To(Equal(keys[0]), "most recent value is not getting updated")
 		})
 	})
 
