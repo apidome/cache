@@ -110,6 +110,7 @@ const (
 	errorTypeNilUpdateFunc               = "NilUpdateFunc"
 	errorTypeInvalidKeyType              = "InvalidKeyType"
 	errorTypeInvalidMessage              = "InvalidMessage"
+	errorTypeCacheNotEmpty               = "CacheNotEmpty"
 )
 
 func newError(errType errorType, msg string) cacheError {

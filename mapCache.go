@@ -21,8 +21,8 @@ type mapCache struct {
 
 var _ UpdatingExpiringCache = (*mapCache)(nil)
 
-// Create a new Cache object that is backed by a map.
-func NewMapCache() UpdatingExpiringCache {
+// NewMapCache creates a new Cache object that is backed by a map.
+func NewMapCache() *mapCache {
 	return &mapCache{
 		cacheMap:       map[interface{}]interface{}{},
 		removeChannels: map[interface{}]*cacheChannel{},
