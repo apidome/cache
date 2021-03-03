@@ -5,13 +5,20 @@ import (
 )
 
 type lfuItem struct {
+	// The item's value is the key of a specific
+	// value stored in lfuCache.
 	value interface{}
 
+	// The amount of time that a certain key has been accessed.
 	frequency int
 
+	// The index of the item in the heap.
+	// It is needed by update and is maintained by the
+	// heap.Interface methods.
 	index int
 }
 
+// A slice of lfuItems that behaves is a min heap.
 type lfuHeap []*lfuItem
 
 func (h lfuHeap) Len() int {
@@ -19,19 +26,30 @@ func (h lfuHeap) Len() int {
 }
 
 func (h lfuHeap) Less(i, j int) bool {
-
+	return h[i].frequency < h[j].frequency
 }
 
 func (h lfuHeap) Swap(i, j int) {
-
+	h[i], h[j] = h[j], h[i]
+	h[i].index = j
+	h[j].index = i
 }
 
 func (h *lfuHeap) Push(x interface{}) {
-
+	n := len(*h)
+	item := x.(*lfuItem)
+	item.index = n
+	*h = append(*h, item)
 }
 
 func (h *lfuHeap) Pop() interface{} {
-
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	old[n-1] = nil
+	item.index = -1
+	*h = old[0 : n-1]
+	return item
 }
 
 type lfuCache struct {
