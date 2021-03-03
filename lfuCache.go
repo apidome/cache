@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"container/heap"
 	"sync"
 )
 
@@ -20,6 +21,8 @@ type lfuItem struct {
 
 // A slice of lfuItems that behaves is a min heap.
 type lfuHeap []*lfuItem
+
+var _ heap.Interface = (*lfuHeap)(nil)
 
 func (h lfuHeap) Len() int {
 	return len(h)
