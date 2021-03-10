@@ -71,16 +71,36 @@ var _ Cache = (*lfuCache)(nil)
 
 // NewLfu creates a new lfuCache instance using mapCache.
 func NewLfu(capacity int) *lfuCache {
-
+	return &lfuCache{
+		capacity: capacity,
+		storage:  NewMapCache(),
+		heap:     lfuHeap{},
+	}
 }
 
 // NewLfuWithCustomCache creates a new lfuCache with custom cache.
 func NewLfuWithCustomCache(capacity int, cache Cache) (*lfuCache, error) {
+	keys, err := cache.Keys()
+	if err != nil {
+		return nil, err
+	}
 
+	if len(keys) > 0 {
+		return nil, newError(errorTypeCacheNotEmpty, "supplied cache must be empty")
+	}
+
+	return &lfuCache{
+		capacity: capacity,
+		storage:  cache,
+		heap:     lfuHeap{},
+	}, nil
 }
 
 func (lfu *lfuCache) Store(key, val interface{}) error {
+	lfu.mutex.Lock()
+	defer lfu.mutex.Unlock()
 
+	return lfu.store(key, val)
 }
 
 func (lfu *lfuCache) store(key, val interface{}) error {
@@ -88,7 +108,10 @@ func (lfu *lfuCache) store(key, val interface{}) error {
 }
 
 func (lfu *lfuCache) Get(key interface{}) (interface{}, error) {
+	lfu.mutex.Lock()
+	defer lfu.mutex.Unlock()
 
+	return lfu.get(key)
 }
 
 func (lfu *lfuCache) get(key interface{}) (interface{}, error) {
@@ -106,7 +129,10 @@ func (lfu *lfuCache) GetLeastFrequentlyUsedKey() interface{} {
 }
 
 func (lfu *lfuCache) Remove(key interface{}) error {
+	lfu.mutex.Lock()
+	defer lfu.mutex.Unlock()
 
+	return lfu.remove(key)
 }
 
 func (lfu *lfuCache) remove(key interface{}) error {
@@ -114,7 +140,10 @@ func (lfu *lfuCache) remove(key interface{}) error {
 }
 
 func (lfu *lfuCache) Replace(key, value interface{}) error {
+	lfu.mutex.Lock()
+	defer lfu.mutex.Unlock()
 
+	return lfu.replace(key, value)
 }
 
 func (lfu *lfuCache) replace(key, value interface{}) error {
@@ -122,7 +151,10 @@ func (lfu *lfuCache) replace(key, value interface{}) error {
 }
 
 func (lfu *lfuCache) Clear() error {
+	lfu.mutex.Lock()
+	defer lfu.mutex.Unlock()
 
+	return lfu.clear()
 }
 
 func (lfu *lfuCache) clear() error {
@@ -130,11 +162,14 @@ func (lfu *lfuCache) clear() error {
 }
 
 func (lfu *lfuCache) Keys() ([]interface{}, error) {
-
+	return lfu.storage.Keys()
 }
 
 func (lfu *lfuCache) Count() int {
+	lfu.mutex.Lock()
+	defer lfu.mutex.Unlock()
 
+	return lfu.count()
 }
 
 func (lfu *lfuCache) count() int {
@@ -142,7 +177,10 @@ func (lfu *lfuCache) count() int {
 }
 
 func (lfu *lfuCache) IsFull() bool {
+	lfu.mutex.Lock()
+	defer lfu.mutex.Unlock()
 
+	return lfu.isFull()
 }
 
 func (lfu *lfuCache) isFull() bool {
@@ -150,7 +188,10 @@ func (lfu *lfuCache) isFull() bool {
 }
 
 func (lfu *lfuCache) IsEmpty() bool {
+	lfu.mutex.Lock()
+	defer lfu.mutex.Unlock()
 
+	return lfu.isEmpty()
 }
 
 func (lfu *lfuCache) isEmpty() bool {
