@@ -120,7 +120,7 @@ func (lfu *lfuCache) get(key interface{}) (interface{}, error) {
 
 // GetLeastFrequentlyUsedKey returns the key from the back of the linked list.
 func (lfu *lfuCache) GetLeastFrequentlyUsedKey() interface{} {
-	return lfu.heap[0]
+	return lfu.heap[0].value
 }
 
 func (lfu *lfuCache) Remove(key interface{}) error {
