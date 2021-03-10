@@ -119,13 +119,10 @@ func (lfu *lfuCache) get(key interface{}) (interface{}, error) {
 }
 
 // GetMostFrequentlyUsedKey returns the key from the front of the linked list.
+// Since we use a min heap - getting the most frequently used key will run
+// in O(log n) complexity.
 func (lfu *lfuCache) GetMostFrequentlyUsedKey() interface{} {
-
-}
-
-// GetLeastFrequentlyUsedKey returns the key from the back of the linked list.
-func (lfu *lfuCache) GetLeastFrequentlyUsedKey() interface{} {
-
+	return lfu.heap[0].value
 }
 
 func (lfu *lfuCache) Remove(key interface{}) error {
@@ -173,7 +170,7 @@ func (lfu *lfuCache) Count() int {
 }
 
 func (lfu *lfuCache) count() int {
-
+	return lfu.numberOfItems
 }
 
 func (lfu *lfuCache) IsFull() bool {
@@ -184,7 +181,7 @@ func (lfu *lfuCache) IsFull() bool {
 }
 
 func (lfu *lfuCache) isFull() bool {
-
+	return lfu.numberOfItems >= lfu.capacity
 }
 
 func (lfu *lfuCache) IsEmpty() bool {
@@ -195,5 +192,5 @@ func (lfu *lfuCache) IsEmpty() bool {
 }
 
 func (lfu *lfuCache) isEmpty() bool {
-
+	return lfu.numberOfItems < 0
 }
