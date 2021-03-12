@@ -154,6 +154,9 @@ func (lfu *lfuCache) get(key interface{}) (interface{}, error) {
 	lfuItem := item.(lfuItem)
 	lfuItem.heapItem.frequency++
 
+	// After we changed the frequency we need to re-establish the heap ordering.
+	heap.Init(&lfu.heap)
+
 	return lfuItem.value, nil
 }
 
@@ -220,7 +223,15 @@ func (lfu *lfuCache) Clear() error {
 }
 
 func (lfu *lfuCache) clear() error {
+	err := lfu.storage.Clear()
+	if err != nil {
+		return err
+	}
 
+	// Clear the heap.
+	lfu.heap = nil
+
+	return nil
 }
 
 func (lfu *lfuCache) Keys() ([]interface{}, error) {
