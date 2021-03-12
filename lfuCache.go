@@ -149,7 +149,16 @@ func (lfu *lfuCache) Get(key interface{}) (interface{}, error) {
 }
 
 func (lfu *lfuCache) get(key interface{}) (interface{}, error) {
+	item, err := lfu.storage.Get(key)
+	if err != nil {
+		return nil, err
+	}
 
+	// Increase itme's frequency.
+	lfuItem := item.(lfuItem)
+	lfuItem.heapItem.frequency++
+
+	return lfuItem.value, nil
 }
 
 // GetLeastFrequentlyUsedKey returns the key from the back of the linked list.
