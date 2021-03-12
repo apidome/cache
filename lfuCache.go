@@ -63,8 +63,6 @@ type lfuItem struct {
 type lfuCache struct {
 	capacity int
 
-	numberOfItems int
-
 	storage Cache
 
 	heap lfuHeap
@@ -125,17 +123,15 @@ func (lfu *lfuCache) store(key, val interface{}) error {
 	}
 
 	// Add the new key to the heap.
-	lfu.heap.Push(heapItem)
+	heap.Push(&lfu.heap, heapItem)
 
 	// If the inner cache is full, remove the least frequently used.
 	if lfu.isFull() {
-		heapItem := lfu.heap.Pop().(*lfuHeapItem)
+		heapItem := heap.Pop(&lfu.heap).(*lfuHeapItem)
 		err := lfu.storage.Remove(heapItem.value)
 		if err != nil {
 			return err
 		}
-	} else {
-		lfu.numberOfItems++
 	}
 
 	return nil
@@ -174,7 +170,25 @@ func (lfu *lfuCache) Remove(key interface{}) error {
 }
 
 func (lfu *lfuCache) remove(key interface{}) error {
+	value, err := lfu.storage.Get(key)
+	if err != nil {
+		return err
+	}
 
+	err = lfu.storage.Remove(key)
+	if err != nil {
+		return err
+	}
+
+	// TODO: find a better way to remove the item from the heap (if there is one).
+	lfuItem := value.(lfuItem)
+	for i, heapItem := range lfu.heap {
+		if heapItem == lfuItem.heapItem {
+			heap.Remove(&lfu.heap, i)
+		}
+	}
+
+	return nil
 }
 
 func (lfu *lfuCache) Replace(key, value interface{}) error {
@@ -185,7 +199,17 @@ func (lfu *lfuCache) Replace(key, value interface{}) error {
 }
 
 func (lfu *lfuCache) replace(key, value interface{}) error {
+	err := lfu.remove(key)
+	if err != nil {
+		return err
+	}
 
+	err = lfu.store(key, value)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (lfu *lfuCache) Clear() error {
@@ -211,7 +235,7 @@ func (lfu *lfuCache) Count() int {
 }
 
 func (lfu *lfuCache) count() int {
-	return lfu.numberOfItems
+	return lfu.heap.Len()
 }
 
 func (lfu *lfuCache) IsFull() bool {
@@ -222,7 +246,7 @@ func (lfu *lfuCache) IsFull() bool {
 }
 
 func (lfu *lfuCache) isFull() bool {
-	return lfu.numberOfItems >= lfu.capacity
+	return lfu.heap.Len() >= lfu.capacity
 }
 
 func (lfu *lfuCache) IsEmpty() bool {
@@ -233,5 +257,5 @@ func (lfu *lfuCache) IsEmpty() bool {
 }
 
 func (lfu *lfuCache) isEmpty() bool {
-	return lfu.numberOfItems < 0
+	return lfu.heap.Len() < 1
 }
