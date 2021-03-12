@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type lfuItem struct {
+type lfuHeapItem struct {
 	// The item's value is the key of a specific
 	// value stored in lfuCache.
 	value interface{}
@@ -20,7 +20,7 @@ type lfuItem struct {
 }
 
 // A slice of lfuItems that behaves is a min heap.
-type lfuHeap []*lfuItem
+type lfuHeap []*lfuHeapItem
 
 var _ heap.Interface = (*lfuHeap)(nil)
 
@@ -40,7 +40,7 @@ func (h lfuHeap) Swap(i, j int) {
 
 func (h *lfuHeap) Push(x interface{}) {
 	n := len(*h)
-	item := x.(*lfuItem)
+	item := x.(*lfuHeapItem)
 	item.index = n
 	*h = append(*h, item)
 }
@@ -53,6 +53,11 @@ func (h *lfuHeap) Pop() interface{} {
 	item.index = -1
 	*h = old[0 : n-1]
 	return item
+}
+
+type lfuItem struct {
+	heapItem *lfuHeapItem
+	value    interface{}
 }
 
 type lfuCache struct {
@@ -104,7 +109,36 @@ func (lfu *lfuCache) Store(key, val interface{}) error {
 }
 
 func (lfu *lfuCache) store(key, val interface{}) error {
+	// Create a new lfu heap item.
+	heapItem := &lfuHeapItem{
+		value:     key,
+		frequency: 0,
+	}
 
+	// Create a new lfu item.
+	item := lfuItem{heapItem, val}
+
+	// Store the new item in the inner cache.
+	err := lfu.storage.Store(key, item)
+	if err != nil {
+		return err
+	}
+
+	// Add the new key to the heap.
+	lfu.heap.Push(heapItem)
+
+	// If the inner cache is full, remove the least frequently used.
+	if lfu.isFull() {
+		heapItem := lfu.heap.Pop().(*lfuHeapItem)
+		err := lfu.storage.Remove(heapItem.value)
+		if err != nil {
+			return err
+		}
+	} else {
+		lfu.numberOfItems++
+	}
+
+	return nil
 }
 
 func (lfu *lfuCache) Get(key interface{}) (interface{}, error) {

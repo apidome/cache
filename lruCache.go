@@ -71,7 +71,7 @@ func (lru *lruCache) store(key, val interface{}) error {
 	// Create a new node at the front of the linked list.
 	node := lru.list.PushFront(key)
 
-	// Store the new value.
+	// Create a new lru item.
 	item := lruItem{val, node}
 
 	// Store the new item in the hash map cache.
@@ -84,7 +84,7 @@ func (lru *lruCache) store(key, val interface{}) error {
 	}
 
 	// If the cache is full, remove the least recently used item.
-	if lru.numberOfItems == lru.capacity {
+	if lru.isFull() {
 		err := lru.storage.Remove(lru.list.Back().Value)
 		if err != nil {
 			return err
