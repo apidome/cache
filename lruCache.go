@@ -17,7 +17,7 @@ type lruCache struct {
 	// The maximal amount of cached items.
 	capacity int
 
-	// // Current number of cached items.
+	// Current number of cached items.
 	numberOfItems int
 
 	// A cache that holds tha data.
@@ -59,7 +59,7 @@ func NewLruWithCustomCache(capacity int, cache Cache) (*lruCache, error) {
 	}, nil
 }
 
-// Cache a new value.
+// Store caches a new value.
 func (lru *lruCache) Store(key, val interface{}) error {
 	lru.mutex.Lock()
 	defer lru.mutex.Unlock()
@@ -71,7 +71,7 @@ func (lru *lruCache) store(key, val interface{}) error {
 	// Create a new node at the front of the linked list.
 	node := lru.list.PushFront(key)
 
-	// Store the new value.
+	// Create a new lru item.
 	item := lruItem{val, node}
 
 	// Store the new item in the hash map cache.
@@ -84,7 +84,7 @@ func (lru *lruCache) store(key, val interface{}) error {
 	}
 
 	// If the cache is full, remove the least recently used item.
-	if lru.numberOfItems == lru.capacity {
+	if lru.isFull() {
 		err := lru.storage.Remove(lru.list.Back().Value)
 		if err != nil {
 			return err
@@ -227,7 +227,7 @@ func (lru *lruCache) IsFull() bool {
 }
 
 func (lru *lruCache) isFull() bool {
-	return lru.capacity == lru.numberOfItems
+	return lru.capacity <= lru.numberOfItems
 }
 
 // IsEmpty return false if cache is empty.
@@ -239,5 +239,5 @@ func (lru *lruCache) IsEmpty() bool {
 }
 
 func (lru *lruCache) isEmpty() bool {
-	return lru.numberOfItems == 0
+	return lru.numberOfItems < 1
 }

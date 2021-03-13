@@ -24,8 +24,8 @@ You can use the following concrete cache types:
   
 ## Behavioural Cache
 You can wrap your concrete cache with the following behavioural cache types:
-- LFU Cache (Least Recently Used)
-- *COMING SOON* - LFU Cache (Least Frequently Used)
+- LRU Cache (Least Recently Used)
+- LFU Cache (Least Frequently Used)
 # Usage
 ## MapCache
 A cache that stores your data in the process's memory.
@@ -159,7 +159,7 @@ import (
  )
 
 func main() {
-    // An LRU cache requires a predefined capacity.
+    // An LRU cache requires a predefined capacity
     lru := NewLru(3)
 
     // Get the amount of stored items 
@@ -168,7 +168,7 @@ func main() {
     // Check if lru cache is full
     isFull := lru.IsFull()
 
-    // Check if lru cache is emptyv
+    // Check if lru cache is empty
     isEmpty := lru.IsEmpty()
 
     // Get the most recently used key
@@ -178,15 +178,41 @@ func main() {
     leastRecent := lru.GetLeastRecentlyUsedKey()
 }
 ```
-It is also possible to create an LRU Cache that works with other type of cache, DirectoryCache for example.
+## LFU Cache
+An implementation of Least Frequently Used cache algorithm.
+```go
+import (
+  "github.com/apidome/cache"
+  "fmt"
+ )
+
+func main() {
+    // An LFU cache requires a predefined capacity
+    lfu := NewLfu(3)
+
+    // Get the amount of stored items 
+    numberOfItems := lfu.Count()
+
+    // Check if lfu cache is full
+    isFull := lfu.IsFull()
+
+    // Check if lfu cache is empty
+    isEmpty := lfu.IsEmpty()
+
+    // Get the least frequqntly used key
+    leastFrequent := lfu.GetLeastFrequentlyUsedKey()
+}
+```
+## Cache combination
+It is possible to create an behavioural Cache that works with other type of cache, DirectoryCache for example.
 ```go
 func main() {
-    // Initialize your own cache.
+    // Initialize your own cache
     dc := NewDirectoryCache()
 
-    // Create a new lru with a given instance,
+    // Create a new lru with a given instance
     lru := NewLruWithCustomCache(3, dc)
 }
 ```
 
-***NOTE***: When creating an LRU cache with custom concrete cache, the given concrete cahce must be empty!
+***NOTE***: When creating a behavioural cache with custom concrete cache, the given concrete cahce must be empty!
