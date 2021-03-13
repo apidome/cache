@@ -102,7 +102,7 @@ var _ = Describe("LFU Cache", func() {
 			Expect(c.Count()).To(Equal(0))
 		})
 
-		FIt("should be able to store more items after clear", func() {
+		It("should be able to store more items after clear", func() {
 			Expect(c.Clear()).ToNot(HaveOccurred())
 			Expect(c.Count()).To(Equal(0))
 			Expect(c.Store(keys[0], values[0])).ToNot(HaveOccurred(), "failed storing a value")
