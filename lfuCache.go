@@ -61,10 +61,14 @@ type lfuItem struct {
 }
 
 type lfuCache struct {
+	// The maximal amount of cached items.
 	capacity int
 
+	// A cache that holds tha data.
 	storage Cache
 
+	// A min heap that behaves like a priority queue, where the lowest
+	// frequency is the higher priority to remove from the heap.
 	heap lfuHeap
 
 	mutex sync.Mutex
@@ -99,6 +103,8 @@ func NewLfuWithCustomCache(capacity int, cache Cache) (*lfuCache, error) {
 	}, nil
 }
 
+// Store caches a new value.
+// Complexity - O(log n)
 func (lfu *lfuCache) Store(key, val interface{}) error {
 	lfu.mutex.Lock()
 	defer lfu.mutex.Unlock()
@@ -137,6 +143,7 @@ func (lfu *lfuCache) store(key, val interface{}) error {
 	return nil
 }
 
+// Get a cached value.
 func (lfu *lfuCache) Get(key interface{}) (interface{}, error) {
 	lfu.mutex.Lock()
 	defer lfu.mutex.Unlock()
@@ -160,7 +167,8 @@ func (lfu *lfuCache) get(key interface{}) (interface{}, error) {
 	return lfuItem.value, nil
 }
 
-// GetLeastFrequentlyUsedKey returns the key from the back of the linked list.
+// GetLeastFrequentlyUsedKey returns the next key that will popped from the heap
+// on the next store.
 func (lfu *lfuCache) GetLeastFrequentlyUsedKey() interface{} {
 	if lfu.isEmpty() {
 		return nil
@@ -168,6 +176,8 @@ func (lfu *lfuCache) GetLeastFrequentlyUsedKey() interface{} {
 	return lfu.heap[0].value
 }
 
+// Remove a cahced value.
+// Complexity - O(log n)
 func (lfu *lfuCache) Remove(key interface{}) error {
 	lfu.mutex.Lock()
 	defer lfu.mutex.Unlock()

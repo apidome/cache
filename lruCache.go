@@ -17,7 +17,7 @@ type lruCache struct {
 	// The maximal amount of cached items.
 	capacity int
 
-	// // Current number of cached items.
+	// Current number of cached items.
 	numberOfItems int
 
 	// A cache that holds tha data.
@@ -59,7 +59,7 @@ func NewLruWithCustomCache(capacity int, cache Cache) (*lruCache, error) {
 	}, nil
 }
 
-// Cache a new value.
+// Store caches a new value.
 func (lru *lruCache) Store(key, val interface{}) error {
 	lru.mutex.Lock()
 	defer lru.mutex.Unlock()
