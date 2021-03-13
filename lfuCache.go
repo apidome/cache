@@ -126,7 +126,7 @@ func (lfu *lfuCache) store(key, val interface{}) error {
 	heap.Push(&lfu.heap, heapItem)
 
 	// If the inner cache is full, remove the least frequently used.
-	if lfu.isFull() {
+	if lfu.heap.Len() > lfu.capacity {
 		heapItem := heap.Pop(&lfu.heap).(*lfuHeapItem)
 		err := lfu.storage.Remove(heapItem.value)
 		if err != nil {
@@ -162,6 +162,9 @@ func (lfu *lfuCache) get(key interface{}) (interface{}, error) {
 
 // GetLeastFrequentlyUsedKey returns the key from the back of the linked list.
 func (lfu *lfuCache) GetLeastFrequentlyUsedKey() interface{} {
+	if lfu.isEmpty() {
+		return nil
+	}
 	return lfu.heap[0].value
 }
 

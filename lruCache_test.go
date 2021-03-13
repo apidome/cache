@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const CacheSize = 3
+const LRUCacheSize = 3
 
 var _ = Describe("LRU Cache", func() {
 	var (
@@ -15,13 +15,13 @@ var _ = Describe("LRU Cache", func() {
 		keys, values []string
 	)
 
-	for i := 0; i < CacheSize; i++ {
+	for i := 0; i < LRUCacheSize; i++ {
 		keys = append(keys, fmt.Sprintf("test-key-%v", i))
 		values = append(values, fmt.Sprintf("test-value-%v", i))
 	}
 
 	BeforeEach(func() {
-		c = NewLru(CacheSize)
+		c = NewLru(LRUCacheSize)
 	})
 
 	Context("Store", func() {
@@ -33,25 +33,25 @@ var _ = Describe("LRU Cache", func() {
 		})
 
 		It("should count each cached value", func() {
-			for i := 0; i < CacheSize; i++ {
+			for i := 0; i < LRUCacheSize; i++ {
 				Expect(c.Count()).To(Equal(i), "number of items mismatch")
 				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
 			}
-			Expect(c.Count()).To(Equal(CacheSize), "number of items mismatch")
+			Expect(c.Count()).To(Equal(LRUCacheSize), "number of items mismatch")
 		})
 
 		It("should not increase items counter when cache is full", func() {
-			for i := 0; i < CacheSize; i++ {
+			for i := 0; i < LRUCacheSize; i++ {
 				Expect(c.Count()).To(Equal(i), "number of items mismatch")
 				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
 			}
-			Expect(c.Count()).To(Equal(CacheSize), "number of items mismatch")
+			Expect(c.Count()).To(Equal(LRUCacheSize), "number of items mismatch")
 			c.Store("extra-key", "extra-value")
-			Expect(c.Count()).To(Equal(CacheSize), "number of items increased even though cache is full")
+			Expect(c.Count()).To(Equal(LRUCacheSize), "number of items increased even though cache is full")
 		})
 
 		It("should remove the least recently used value when the cache is full and the user stores a new value", func() {
-			for i := 0; i < CacheSize; i++ {
+			for i := 0; i < LRUCacheSize; i++ {
 				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
 			}
 
@@ -64,11 +64,11 @@ var _ = Describe("LRU Cache", func() {
 
 	Context("Get", func() {
 		It("should move an item to the front of the linked list after it has been accessed", func() {
-			for i := 0; i < CacheSize; i++ {
+			for i := 0; i < LRUCacheSize; i++ {
 				Expect(c.Count()).To(Equal(i), "number of items mismatch")
 				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
 			}
-			Expect(c.GetMostRecentlyUsedKey()).To(Equal(keys[CacheSize-1]))
+			Expect(c.GetMostRecentlyUsedKey()).To(Equal(keys[LRUCacheSize-1]))
 
 			val, err := c.Get(keys[0])
 			Expect(err).ToNot(HaveOccurred(), "failed to get a key")
@@ -79,7 +79,7 @@ var _ = Describe("LRU Cache", func() {
 
 	Context("Remove", func() {
 		BeforeEach(func() {
-			for i := 0; i < CacheSize; i++ {
+			for i := 0; i < LRUCacheSize; i++ {
 				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
 			}
 		})
@@ -92,7 +92,7 @@ var _ = Describe("LRU Cache", func() {
 
 		It("should decrease items counter", func() {
 			Expect(c.Remove(keys[0])).ToNot(HaveOccurred(), "failed to remove item")
-			Expect(c.Count()).To(Equal(CacheSize - 1))
+			Expect(c.Count()).To(Equal(LRUCacheSize - 1))
 		})
 
 		It("should not decrease items counter when cache is empty", func() {
@@ -115,7 +115,7 @@ var _ = Describe("LRU Cache", func() {
 
 	Context("Clear", func() {
 		BeforeEach(func() {
-			for i := 0; i < CacheSize; i++ {
+			for i := 0; i < LRUCacheSize; i++ {
 				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
 			}
 		})
@@ -132,16 +132,16 @@ var _ = Describe("LRU Cache", func() {
 		})
 
 		It("should return the correct amount of cached items", func() {
-			for i := 0; i < CacheSize; i++ {
+			for i := 0; i < LRUCacheSize; i++ {
 				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
 			}
-			Expect(c.Count()).To(Equal(CacheSize))
+			Expect(c.Count()).To(Equal(LRUCacheSize))
 		})
 	})
 
 	Context("IsFull", func() {
 		It("should return true when cache is full", func() {
-			for i := 0; i < CacheSize; i++ {
+			for i := 0; i < LRUCacheSize; i++ {
 				Expect(c.Store(keys[i], values[i])).ToNot(HaveOccurred(), "failed storing a value")
 			}
 			Expect(c.IsFull()).To(Equal(true))
@@ -167,7 +167,7 @@ var _ = Describe("LRU Cache", func() {
 		It("should return an error when being supplied with a non empty cache", func() {
 			mapCache := NewMapCache()
 			Expect(mapCache.Store(keys[0], values[0])).ToNot(HaveOccurred(), "failed storing a value in map cache")
-			_, err := NewLruWithCustomCache(CacheSize, mapCache)
+			_, err := NewLruWithCustomCache(LRUCacheSize, mapCache)
 			Expect(err).To(HaveOccurred())
 		})
 	})

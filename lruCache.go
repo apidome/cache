@@ -227,7 +227,7 @@ func (lru *lruCache) IsFull() bool {
 }
 
 func (lru *lruCache) isFull() bool {
-	return lru.capacity == lru.numberOfItems
+	return lru.capacity <= lru.numberOfItems
 }
 
 // IsEmpty return false if cache is empty.
@@ -239,5 +239,5 @@ func (lru *lruCache) IsEmpty() bool {
 }
 
 func (lru *lruCache) isEmpty() bool {
-	return lru.numberOfItems == 0
+	return lru.numberOfItems < 1
 }
