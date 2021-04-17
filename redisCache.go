@@ -46,9 +46,9 @@ func NewRedisCache(address, password string, db int) *RedisCache {
 
 func (r *RedisCache) store(key, val interface{}, ttl time.Duration) error {
 	strKey := fmt.Sprintf("%v", key)
-	status := r.client.Set(context.TODO(), strKey, val, ttl).Val()
+	err := r.client.Set(context.TODO(), strKey, val, ttl).Err()
 
-	if status != "OK" {
+	if err != nil {
 		return newError(errorTypeRedisError, fmt.Sprintf("could not store key %v", strKey))
 	}
 

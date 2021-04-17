@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Redis Cache", func() {
+var _ = FDescribe("Redis Cache", func() {
 	var (
 		c                        *RedisCache
 		key, val, nonExistentKey string = "test-key", "test-val", "non-existent"
