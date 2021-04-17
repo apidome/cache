@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = FDescribe("Redis Cache", func() {
+var _ = Describe("Redis Cache", func() {
 	var (
 		c                        *RedisCache
 		mock                     redismock.ClientMock
