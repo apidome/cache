@@ -9,20 +9,25 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = FDescribe("Redis Cache", func() {
+var _ = Describe("Redis Cache", func() {
 	var (
 		c                        *RedisCache
+		mock                     redismock.ClientMock
 		key, val, nonExistentKey string = "test-key", "test-val", "non-existent"
 	)
 
 	BeforeEach(func() {
 		c = NewRedisCache("", "", 0)
-		client, _ := redismock.NewClientMock()
+		client, m := redismock.NewClientMock()
 		c.client = client
+		mock = m
 	})
 
 	Context("Store", func() {
 		It("should store a value", func() {
+			mock.ExpectSet(key, val, 0).SetVal("OK")
+			mock.ExpectGet(key).SetVal(val)
+
 			Expect(c.Store(key, val)).ToNot(HaveOccurred(), "failed storing a value")
 			v, err := c.Get(key)
 			Expect(v).To(Equal(val),
@@ -33,6 +38,8 @@ var _ = FDescribe("Redis Cache", func() {
 
 	Context("Get", func() {
 		BeforeEach(func() {
+			mock.ExpectSet(key, val, 0).SetVal("OK")
+			mock.ExpectGet(key).SetVal(val)
 			c.Store(key, val)
 		})
 
@@ -50,6 +57,8 @@ var _ = FDescribe("Redis Cache", func() {
 		})
 
 		It("should not remove a value after it was fethced", func() {
+			mock.ExpectGet(key).SetVal(val)
+
 			_, err := c.Get(key)
 			Expect(err).ToNot(HaveOccurred())
 			_, err = c.Get(key)
@@ -59,6 +68,8 @@ var _ = FDescribe("Redis Cache", func() {
 
 	Context("Remove", func() {
 		BeforeEach(func() {
+			mock.ExpectSet(key, val, 0).SetVal("OK")
+			mock.ExpectDel(key).SetVal(1)
 			c.Store(key, val)
 		})
 
@@ -67,6 +78,8 @@ var _ = FDescribe("Redis Cache", func() {
 		})
 
 		It("should store a value after it was removed", func() {
+			mock.ExpectSet(key, val, 0).SetVal("OK")
+
 			Expect(c.Remove(key)).ToNot(HaveOccurred(), "value was not removed")
 			Expect(c.Store(key, val)).NotTo(HaveOccurred(),
 				"value could not be added eventhough it's key is available")
@@ -80,13 +93,16 @@ var _ = FDescribe("Redis Cache", func() {
 
 	Context("Replace", func() {
 		BeforeEach(func() {
+			mock.ExpectSet(key, val, 0).SetVal("OK")
 			c.Store(key, val)
 		})
 
 		It("should replace a permanent value", func() {
 			newVal := "new"
+			mock.ExpectSet(key, newVal, 0).SetVal("OK")
 			Expect(c.Replace(key, newVal)).ToNot(HaveOccurred())
 
+			mock.ExpectGet(key).SetVal(newVal)
 			val, err := c.Get(key)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(val).To(Equal(newVal), "a value was not replaced")
@@ -95,9 +111,13 @@ var _ = FDescribe("Redis Cache", func() {
 		It("should replace a temporary value with a permanent one", func() {
 			key, val := "tempKey", "tempVal"
 			ttl := 3 * time.Second
+			mock.ExpectSet(key, val, ttl).SetVal("OK")
 			Expect(c.StoreWithExpiration(key, val, ttl)).ToNot(HaveOccurred())
+
+			mock.ExpectSet(key, val+val, 0).SetVal("OK")
 			Expect(c.Replace(key, val+val)).ToNot(HaveOccurred())
 			Eventually(func() bool {
+				mock.ExpectGet(key).SetVal(val + val)
 				retVal, err := c.Get(key)
 				return err == nil && retVal == val+val
 			}, testTimeout).Should(BeTrue())
@@ -110,13 +130,17 @@ var _ = FDescribe("Redis Cache", func() {
 
 	Context("Expire", func() {
 		BeforeEach(func() {
+			mock.ExpectSet(key, val, 0).SetVal("OK")
 			Expect(c.Store(key, val)).ToNot(HaveOccurred())
 		})
 
 		It("should be removed after expiration time is set", func() {
-			c.Expire(key, 3*time.Second)
+			ttl := 3 * time.Second
+			mock.ExpectExpire(key, ttl)
+			c.Expire(key, ttl)
 
 			Eventually(func() bool {
+				mock.ExpectGet(key).SetVal(val)
 				_, err := c.Get(key)
 				return IsDoesNotExist(err)
 			}, testTimeout).Should(BeTrue(),

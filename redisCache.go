@@ -89,6 +89,8 @@ func (r *RedisCache) remove(key interface{}) error {
 
 	res := r.client.Del(context.TODO(), strKey).Val()
 	if res < 1 {
+
+		fmt.Println("ITAY", res)
 		return newError(errorTypeDoesNotExist,
 			fmt.Sprintf("could not delete key %v", strKey))
 	}
