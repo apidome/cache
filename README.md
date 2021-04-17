@@ -21,6 +21,7 @@ go get github.com/apidome/cache@v0.1.15
 You can use the following concrete cache types:
 - Map Cache
 - Directory Cache
+- Redis Cache
   
 ## Behavioural Cache
 You can wrap your concrete cache with the following behavioural cache types:
@@ -150,6 +151,20 @@ func main() {
     }, time.Minute)
 }
 ```
+## Redis Cache
+A bridge between our cache interface and a Redis server.
+```go
+import (
+  "github.com/apidome/cache"
+  "fmt"
+)
+
+func main() {
+    // Initializing a RedisCache instance. The third argument is the
+    // redis database number.
+    redisCache := NewRedisCache("127.0.0.1", "password", 0)
+}
+```
 ## LRU Cache
 An implementation of Least Recently Used cache algorithm. Although behavioural cache types are not independent, LRU cache will work with MapCache by default.
 ```go
@@ -204,7 +219,7 @@ func main() {
 }
 ```
 ## Cache combination
-It is possible to create an behavioural Cache that works with other type of cache, DirectoryCache for example.
+It is possible to create a behavioural Cache that works with other type of cache, DirectoryCache for example.
 ```go
 func main() {
     // Initialize your own cache
