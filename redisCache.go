@@ -49,7 +49,7 @@ func (r *RedisCache) store(key, val interface{}, ttl time.Duration) error {
 	err := r.client.Set(context.TODO(), strKey, val, ttl).Err()
 
 	if err != nil {
-		return newError(errorTypeRedisError, fmt.Sprintf("could not store key %v", strKey))
+		return newError(errorTypeRedisError, fmt.Sprintf("could not store key %v: %v", strKey, err))
 	}
 
 	r.keysSet[strKey] = struct{}{}
